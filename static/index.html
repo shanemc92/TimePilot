@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TimePilot</title>
+<link rel="icon" type="image/png" href="/static/favicon.png">
+<style>
+:root{
+  --r:10px; --gap:12px;
+}
+[data-theme="dark"]{
+  --bg:#121417; --surface:#1b1e23; --surface2:#23272e; --line:#2e333b;
+  --text:#e7e9ec; --muted:#8b93a1; --accent:#e8a33d; --accent-text:#121417;
+  --cat-general:#5b9bd5; --cat-secops:#e05d44; --cat-change:#a17ae0;
+  --cal:#3d566e; --danger:#e05d44; --ok:#57b76a; --lcd-bg:#0c0e10;
+}
+[data-theme="light"]{
+  --bg:#f4f3ef; --surface:#ffffff; --surface2:#eceae4; --line:#dcd9d0;
+  --text:#25282c; --muted:#767c86; --accent:#b06f1e; --accent-text:#fff;
+  --cat-general:#2f6ea5; --cat-secops:#c0392b; --cat-change:#7d4fc2;
+  --cal:#8195a8; --danger:#c0392b; --ok:#2e8b47; --lcd-bg:#1c2530;
+}
+[data-theme="htb"]{
+  --bg:#141d2b; --surface:#1a2332; --surface2:#232e42; --line:#2d3a52;
+  --text:#c5d1e6; --muted:#7d8bab; --accent:#9fef00; --accent-text:#141d2b;
+  --cat-general:#04d9ff; --cat-secops:#ff3e3e; --cat-change:#cf8dfb;
+  --cal:#3b4d6b; --danger:#ff3e3e; --ok:#9fef00; --lcd-bg:#0d1520;
+}
+[data-theme="dracula"]{
+  --bg:#282a36; --surface:#21222c; --surface2:#2e3040; --line:#44475a;
+  --text:#f8f8f2; --muted:#6272a4; --accent:#bd93f9; --accent-text:#282a36;
+  --cat-general:#8be9fd; --cat-secops:#ff5555; --cat-change:#bd93f9;
+  --cal:#191a21; --danger:#ff5555; --ok:#50fa7b; --lcd-bg:#14151c;
+}
+[data-font="sans"]{ --ff:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+[data-font="mono"]{ --ff:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace; }
+[data-font="serif"]{ --ff:Georgia,"Times New Roman",serif; }
+
+*{box-sizing:border-box;margin:0}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--ff);font-size:15px;line-height:1.45}
+button{font-family:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface2);
+  color:var(--text);border-radius:7px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:600}
+button.ghost{background:transparent}
+button.danger{color:var(--danger)}
+input,select,textarea{font-family:inherit;font-size:14px;background:var(--surface2);color:var(--text);
+  border:1px solid var(--line);border-radius:7px;padding:6px 8px}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+h1{font-size:17px;letter-spacing:.04em}
+.muted{color:var(--muted)} .small{font-size:12px}
+
+/* ---- sticky topbar: timer strip + tabs ---- */
+#topbar{position:sticky;top:0;z-index:40;background:var(--bg)}
+#strip{background:var(--surface);border-bottom:1px solid var(--line);
+  padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+#strip .dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex:none}
+#strip.running .dot{background:var(--ok);animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){#strip.running .dot{animation:none}}
+@font-face{
+  font-family:'TP Digital';
+  src:url('/static/digital.woff') format('woff');
+  font-display:swap;
+}
+#elapsed.lcd{
+  font-family:'TP Digital','Courier New',ui-monospace,monospace;
+  font-variant-numeric:tabular-nums;
+  font-size:30px;font-weight:400;letter-spacing:3px;min-width:132px;text-align:center;
+  color:var(--ok);background:var(--lcd-bg);
+  border:1px solid var(--line);border-radius:6px;padding:4px 14px 2px;
+  box-shadow:inset 0 1px 5px rgba(0,0,0,.45);
+  text-shadow:0 0 5px color-mix(in srgb, var(--ok) 60%, transparent);
+}
+#timerInfo{display:flex;flex-direction:column;line-height:1.15;cursor:pointer;border-radius:6px;padding:2px 6px}
+#timerInfo:hover{background:var(--surface2)}
+#timerInfo.idle{cursor:default}
+#timerInfo.idle:hover{background:none}
+#timerLabel{font-weight:600;max-width:34ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#timerTimes{font-variant-numeric:tabular-nums;font-family:ui-monospace,monospace;font-size:12px;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.chip{border-radius:999px;padding:4px 12px;font-size:12px}
+.chip.active{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+
+/* ---- nav ---- */
+nav{display:flex;gap:4px;padding:8px 14px;border-bottom:1px solid var(--line);align-items:center;flex-wrap:wrap;background:var(--bg)}
+nav .tab{background:transparent;border:none;padding:7px 12px;border-radius:7px;color:var(--muted);font-size:14px}
+nav .tab.on{background:var(--surface2);color:var(--text);font-weight:600}
+nav .spacer{margin-left:auto}
+
+main{padding:14px;max-width:1400px;margin:0 auto}
+
+/* ---- board ---- */
+#board{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:var(--gap);align-items:start}
+.col{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px;min-height:120px}
+.col.dragover{border-color:var(--accent)}
+.col h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:8px;
+  display:flex;justify-content:space-between}
+.card{background:var(--surface2);border:1px solid var(--line);border-left:3px solid var(--muted);
+  border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:grab}
+.card .title{font-weight:600;font-size:14px}
+.card .meta{display:flex;gap:8px;align-items:center;margin-top:5px;font-size:11px;color:var(--muted);flex-wrap:wrap}
+.card .meta button{padding:2px 8px;font-size:11px;flex:none}
+.card .meta .metaSpacer{flex:1 1 auto;min-width:0}
+.badge{padding:1px 7px;border-radius:999px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+.addRow select{font-size:12px;padding:4px;max-width:78px}
+.addRow{display:flex;gap:6px;margin-top:4px}
+.addRow input{flex:1;min-width:0}
+
+/* ---- today timeline ---- */
+#todayWrap{display:grid;grid-template-columns:minmax(0,2fr) minmax(240px,1fr);gap:var(--gap)}
+@media(max-width:820px){#todayWrap{grid-template-columns:1fr}}
+#timeline{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.hourRow{position:absolute;left:0;right:0;border-top:1px solid var(--line);font-size:10px;color:var(--muted);padding:2px 6px}
+.block{position:absolute;left:56px;right:8px;border-radius:6px;padding:4px 8px;font-size:12px;overflow:hidden;border:1px solid rgba(0,0,0,.25)}
+.block .t{font-weight:600}
+.block.cal{background:var(--cal);color:#fff}
+.block.task{font-weight:600;cursor:grab;user-select:none;touch-action:none}
+.block.task:active{cursor:grabbing}
+
+/* markdown rendering (Clipboard) */
+.mdBody{font-family:var(--ff);font-size:13px;cursor:pointer}
+.mdBody h2{font-size:15px;margin:6px 0 3px} .mdBody h3{font-size:14px;margin:5px 0 2px} .mdBody h4{font-size:13px;margin:4px 0 2px}
+.mdBody ul,.mdBody ol{margin:4px 0 4px 20px}
+.mdBody code{background:var(--surface2);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-family:ui-monospace,monospace;font-size:12px}
+.mdBody pre.mdCode{background:var(--surface2);border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:5px 0;font-size:12px;overflow-x:auto;font-family:ui-monospace,monospace}
+.mdBody a{color:var(--accent)}
+.block.now{left:0;right:0;height:0;border-top:2px solid var(--accent);z-index:5;padding:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px}
+.panel h3{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px}
+.slotItem{display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.slotItem:last-child{border-bottom:none}
+.slotItem .nm{flex:1;min-width:120px;font-size:13px}
+.slotItem input[type=time]{width:96px}
+
+/* ---- notes ---- */
+#notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--gap);align-items:start}
+.noteItem{display:flex;gap:6px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line)}
+.noteItem:last-child{border-bottom:none}
+.noteItem .tx{flex:1;font-size:13px;white-space:pre-wrap}
+.noteItem .tx[contenteditable]:focus{outline:1px solid var(--accent);border-radius:4px;padding:2px}
+
+/* ---- export ---- */
+#exportWrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--gap)}
+@media(max-width:1100px){#exportWrap{grid-template-columns:1fr}}
+#exportWrap .panel{min-width:0;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+#exportTable{table-layout:fixed;width:100%}
+#exportTable th:nth-child(1),#exportTable td:nth-child(1){width:auto}
+#exportTable th:nth-child(2),#exportTable td:nth-child(2){width:88px}
+#exportTable th:nth-child(3),#exportTable td:nth-child(3),
+#exportTable th:nth-child(4),#exportTable td:nth-child(4){width:82px}
+#exportTable th:nth-child(5),#exportTable td:nth-child(5){width:58px}
+#exportTable th:nth-child(6),#exportTable td:nth-child(6){width:70px}
+td,th{padding:5px 6px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+td input{width:100%;padding:3px 6px;font-size:13px}
+#entryRows td:nth-child(2){max-width:0}
+#entryRows select{width:100%;min-width:70px;font-size:12px}
+td input[type=time]{width:74px;padding:3px 2px;font-size:12px}
+td input[type=number]{width:46px}
+.labCell{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.labCell input{flex:1;min-width:50px;width:auto}
+.rowActs{white-space:nowrap}
+.rowActs .actWrap{display:inline-flex;gap:4px;align-items:center;vertical-align:middle}
+.rowActs button{padding:3px 7px;line-height:1.4}
+tr.rowDirty td{background:color-mix(in srgb, var(--accent) 10%, transparent)}
+pre#exportText{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:12px;
+  white-space:pre-wrap;font-size:13px;font-family:ui-monospace,monospace;min-height:140px}
+
+/* ---- snippets / clipboard libraries ---- */
+#view-snips{--accent:#bd93f9}
+[data-theme="light"] #view-snips{--accent:#8b5fd0}
+.libGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--gap);align-items:start}
+.libCard .hd{margin-bottom:2px}
+.libCard .hd strong{font-size:14px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.libCard .hd2{display:flex;gap:5px;align-items:center;flex-wrap:nowrap;margin-bottom:4px;min-height:26px}
+.libCard .hd2 button{padding:3px 8px;font-size:11px;flex:none}
+.libCard .desc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.3em}
+.tagB{border:1px solid var(--accent);color:var(--accent);border-radius:999px;padding:1px 8px;font-size:10px;letter-spacing:.04em;flex:none}
+.libBody{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;margin-top:6px;
+  font-size:12px;line-height:1.5;height:calc(4 * 1.5em + 16px);overflow:auto;white-space:pre-wrap;word-break:break-word;
+  cursor:pointer;font-family:ui-monospace,"Cascadia Code",Menlo,Consolas,monospace}
+.libBody.flash{outline:2px solid var(--ok)}
+.libBody.mdBody{white-space:normal;font-family:var(--ff);font-size:13px}
+.libBar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.libChips{display:flex;gap:6px;flex-wrap:wrap;flex:1 1 auto;min-width:0}
+.libBar > [data-search]{flex:0 1 200px;min-width:120px;margin-left:auto}
+.libBar .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---- modal ---- */
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:60;padding:14px}
+#modal.open{display:flex}
+#modalBox{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;width:min(460px,100%);
+  max-height:90vh;overflow:auto}
+#modalBox h3{margin-bottom:12px}
+.fRow{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.fRow label{font-size:12px;color:var(--muted)}
+.mActions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.notice{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--muted);margin-bottom:10px}
+#saveDot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-left:6px;transition:background .3s}
+#saveDot.dirty{background:var(--accent)}
+#resizeGrip{position:fixed;right:0;bottom:0;width:24px;height:24px;z-index:70;cursor:nwse-resize;
+  display:flex;align-items:flex-end;justify-content:flex-end;padding:0 3px 1px 0;
+  color:var(--muted);font-size:12px;user-select:none;touch-action:none}
+#winCtrls button{padding:3px 10px}
+#dragHandle.draggable{cursor:move;user-select:none;touch-action:none}
+</style>
+</head>
+<body data-theme="dark" data-font="sans">
+
+<div id="topbar">
+<div id="strip">
+  <span class="dot"></span>
+  <span id="elapsed" class="lcd">00:00</span>
+  <div id="timerInfo" title="Click to edit current task">
+    <span id="timerLabel" class="muted">No timer running</span>
+    <span id="timerTimes"></span>
+  </div>
+  <button id="stopBtn" style="display:none">■ Stop</button>
+  <div class="chips" id="interruptChips"></div>
+</div>
+
+<nav>
+  <h1 id="dragHandle">TimePilot<span id="saveDot" title="save state"></span></h1>
+  <button class="tab" data-view="board">Board</button>
+  <button class="tab" data-view="today">Today</button>
+  <button class="tab" data-view="notes">Notes</button>
+  <button class="tab" data-view="snips">Snippets</button>
+  <button class="tab" data-view="paste">Clipboard</button>
+  <button class="tab" data-view="export">Export</button>
+  <span class="spacer"></span>
+  <button id="settingsBtn" class="ghost">⚙ Settings</button>
+  <span id="winCtrls" style="display:none">
+    <button id="wMin" title="Minimise">-</button>
+    <button id="wClose" title="Close">✕</button>
+  </span>
+</nav>
+</div>
+<div id="resizeGrip" style="display:none" title="Drag to resize">◢</div>
+
+<main>
+  <section id="view-board" style="display:none"><div id="board"></div></section>
+
+  <section id="view-today" style="display:none">
+    <div class="notice" id="calNotice" style="display:none"></div>
+    <div id="todayWrap">
+      <div id="timeline"></div>
+      <div>
+        <div class="panel" style="margin-bottom:12px">
+          <h3 style="display:flex;align-items:center"><span>Unslotted today</span><button id="calRefresh" class="ghost small" style="margin-left:auto">↻ refresh cal</button></h3>
+          <div id="unslotted"></div>
+        </div>
+        <div class="panel">
+          <h3>Slotted</h3>
+          <div id="slotted"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-notes" style="display:none">
+    <div style="margin-bottom:10px;display:flex;gap:6px">
+      <input id="newSection" placeholder="New section name..." style="max-width:240px">
+      <button id="addSection">Add section</button>
+    </div>
+    <div id="notes"></div>
+  </section>
+
+  <section id="view-snips" style="display:none"></section>
+  <section id="view-paste" style="display:none"></section>
+
+  <section id="view-export" style="display:none">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <input type="date" id="expDate">
+      <label class="small muted"><input type="checkbox" id="expRaw"> aggregate by task (no times)</label>
+      <button id="copyExport" class="primary">Copy to clipboard</button>
+      <button id="addEntry">+ Manual entry</button>
+      <button id="expCalRefresh" class="ghost">↻ refresh cal</button>
+    </div>
+    <div class="notice" id="expNotice" style="display:none"></div>
+    <div id="exportWrap">
+      <div class="panel">
+        <h3>Entries</h3>
+        <table id="exportTable"><thead><tr><th>Label</th><th>Category</th><th>Start</th><th>End</th><th>Min</th><th></th></tr></thead>
+        <tbody id="entryRows"></tbody></table>
+      </div>
+      <div class="panel">
+        <h3>Time entry text</h3>
+        <pre id="exportText"></pre>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:12px">
+      <h3>Bulk export (date range)</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        <input type="date" id="bulkFrom"> <span class="muted">→</span> <input type="date" id="bulkTo">
+        <button id="bulkGen" class="primary">Generate</button>
+        <button id="bulkCopy">Copy</button>
+        <button id="bulkCsv">Download CSV</button>
+      </div>
+      <pre id="bulkText" class="small" style="background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre;overflow-x:auto;font-family:ui-monospace,monospace;min-height:40px"></pre>
+    </div>
+  </section>
+</main>
+
+<div id="modal"><div id="modalBox"></div></div>
+
+<script>
+"use strict";
+/* ================= state ================= */
+let S = null;               // server state
+let dirty = false, saveT = null;
+const $ = s => document.querySelector(s);
+const uid = () => Math.random().toString(36).slice(2, 10);
+const THEMES = [["dark","Dark"],["light","Light"],["htb","HackTheBox"],["dracula","Dracula"]];
+const FONTS = [["sans","Sans"],["mono","Mono"],["serif","Serif"]];
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const COLS = [["today","Today"],["week","This Week"],["nextweek","Next Week"],["nextmonth","Next Month"],["done","Done"]];
+const DEF_CATS = [{k:"general",label:"General",color:"#5b9bd5"},{k:"meetings",label:"Meetings",color:"#57b76a"},{k:"admin",label:"Admin",color:"#a17ae0"}];
+const getCats = () => (S.settings.categories && S.settings.categories.length) ? S.settings.categories : DEF_CATS;
+const allCats = () => [...getCats(), {k:"meeting",label:"Meeting",color:null}];
+const catOf = k => allCats().find(c=>c.k===k);
+const catName = k => (catOf(k)||{label:"?"}).label;
+const defCat = () => getCats()[0].k;
+const catColorRaw = k => k==="meeting"
+  ? (getComputedStyle(document.body).getPropertyValue("--cal").trim() || "#3d566e")
+  : ((catOf(k)||{}).color || "#888888");
+const catColor = k => safeColor(catColorRaw(k));
+const txtOn = hex => { const n = parseInt(hex.replace("#",""),16);
+  return (0.299*(n>>16&255)+0.587*(n>>8&255)+0.114*(n&255)) > 150 ? "#141414" : "#ffffff"; };
+const badgeHtml = k => { const c = catColor(k);
+  return `<span class="badge" style="background:${c};color:${txtOn(c)}">${esc(catName(k))}</span>`; };
+const entCat = e => e.category || (e.source==="cal" ? "meeting"
+  : ((S.tasks.find(x=>x.id===e.taskId)||{}).category || defCat()));
+let view = "board", calCache = {};
+
+async function loadState(){ S = await (await fetch("/api/state")).json(); dailyCleanup(); applySettings(); renderAll(); }
+function markDirty(){
+  dirty = true; $("#saveDot").classList.add("dirty");
+  clearTimeout(saveT); saveT = setTimeout(persist, 600);
+}
+let _persisting = false;
+async function persist(){
+  if(_persisting) { clearTimeout(saveT); saveT = setTimeout(persist, 300); return; }  // don't overlap writes
+  _persisting = true;
+  const snapshot = JSON.stringify(S);
+  try {
+    const r = await fetch("/api/state",{method:"PUT",headers:{"Content-Type":"application/json"},body:snapshot});
+    if(!r.ok) throw new Error("save failed "+r.status);
+    // only clear the flag if nothing changed while this write was in flight
+    if(JSON.stringify(S) === snapshot){ dirty = false; $("#saveDot").classList.remove("dirty"); }
+  } catch(e){
+    // leave dirty set so a later markDirty/persist retries; surface nothing intrusive
+  } finally {
+    _persisting = false;
+  }
+}
+function persistBeacon(){
+  try { navigator.sendBeacon("/api/state", new Blob([JSON.stringify(S)], {type:"application/json"})); }
+  catch(e){}
+}
+
+/* ================= helpers ================= */
+const pad = n => String(n).padStart(2,"0");
+const hmNow = () => { const d=new Date(); return pad(d.getHours())+":"+pad(d.getMinutes()); };
+const hmToMin = hm => { const [h,m]=hm.split(":").map(Number); return h*60+m; };
+const minToHM = m => pad(Math.floor(m/60))+":"+pad(m%60);
+const fmtDur = m => { m=Math.max(0,Math.round(m)); const h=Math.floor(m/60); return (h? h+"h ":"")+(m%60)+"m"; };
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ascii = s => String(s).replace(/[\u2010-\u2015\u2212]/g,"-").replace(/\u2026/g,"...");
+// only allow #hex / rgb() / named colours into style attributes (defence-in-depth vs hand-edited category JSON)
+const safeColor = c => (typeof c === "string" && /^(#[0-9a-fA-F]{3,8}|rgb\([\d,\s.]+\)|rgba\([\d,\s.%]+\)|[a-zA-Z]+)$/.test(c.trim())) ? c.trim() : "#888888";
+
+/* ================= settings/theme ================= */
+function applySettings(){
+  const validThemes = THEMES.map(t=>t[0]), validFonts = FONTS.map(f=>f[0]);
+  if(!validThemes.includes(S.settings.theme)) S.settings.theme = "dark";
+  if(!validFonts.includes(S.settings.font)) S.settings.font = "sans";
+  document.body.dataset.theme = S.settings.theme;
+  document.body.dataset.font = S.settings.font;
+}
+
+/* ================= timer ================= */
+function startTimer(label, taskId, category){
+  stopTimer();
+  S.activeTimer = { label, taskId: taskId || null, category: category || null, start: new Date().toISOString() };
+  markDirty(); renderStrip();
+}
+function stopTimer(){
+  if(!S.activeTimer) return;
+  const t = S.activeTimer, start = new Date(t.start), end = new Date();
+  const mins = Math.max(1, Math.round((end - start)/60000));
+  const cat = t.category || ((S.tasks.find(x=>x.id===t.taskId)||{}).category) || defCat();
+  S.timelog.push({ id:uid(), date: start.toISOString().slice(0,10), label:t.label, taskId:t.taskId, category:cat,
+    start: pad(start.getHours())+":"+pad(start.getMinutes()), end: hmNow(), minutes: mins });
+  S.activeTimer = null;
+  markDirty(); renderStrip(); if(view==="export") renderExport();
+}
+function renderStrip(){
+  const strip = $("#strip"), t = S.activeTimer;
+  strip.classList.toggle("running", !!t);
+  $("#stopBtn").style.display = t ? "" : "none";
+  $("#timerLabel").textContent = t ? t.label : "No timer running";
+  $("#timerLabel").classList.toggle("muted", !t);
+  $("#timerInfo").classList.toggle("idle", !t);
+  const chips = $("#interruptChips"); chips.innerHTML = "";
+  (S.settings.interrupts||[]).forEach(name=>{
+    const b = document.createElement("button");
+    b.className = "chip" + (t && t.label.startsWith(name) ? " active":"");
+    b.textContent = name;
+    b.onclick = () => interruptModal(name);
+    chips.appendChild(b);
+  });
+  tick();
+}
+function editTimerModal(){
+  const t = S.activeTimer; if(!t) return;
+  const st = new Date(t.start);
+  const curCat = t.category || ((S.tasks.find(x=>x.id===t.taskId)||{}).category) || defCat();
+  openModal(`<h3>Edit current task</h3>
+    <div class="fRow"><label>Task name</label><input id="etName" value="${esc(t.label)}"></div>
+    <div class="fRow"><label>Category</label><select id="etCat">${allCats().map(c=>`<option value="${c.k}"${curCat===c.k?" selected":""}>${esc(c.label)}</option>`).join("")}</select></div>
+    <div class="fRow"><label>Start time (now: running ${fmtDur((Date.now()-st)/60000)})</label><input id="etStart" type="time" value="${pad(st.getHours())}:${pad(st.getMinutes())}"></div>
+    <div class="mActions"><button class="danger" id="etDiscard">Discard timer</button><button id="mCancel">Cancel</button><button class="primary" id="etSave">Save</button></div>`);
+  $("#etSave").onclick = () => {
+    const name = $("#etName").value.trim(); if(!name){ alert("Task name required."); return; }
+    t.label = name; t.category = $("#etCat").value;
+    const [h,m] = $("#etStart").value.split(":").map(Number);
+    const ns = new Date(st); ns.setHours(h, m, 0, 0);
+    if(ns > new Date()){ alert("Start time can't be in the future."); return; }
+    t.start = ns.toISOString();
+    markDirty(); closeModal(); renderStrip();
+  };
+  $("#etDiscard").onclick = () => {
+    if(!confirm("Discard the running timer without logging it?")) return;
+    S.activeTimer = null; markDirty(); closeModal(); renderStrip();
+  };
+  $("#mCancel").onclick = closeModal;
+  setTimeout(()=>$("#etName").focus(), 50);
+}
+$("#timerInfo").onclick = () => { if(S.activeTimer) editTimerModal(); };
+function interruptModal(name){
+  openModal(`<h3>${esc(name)}</h3>
+    <div class="fRow"><label>Detail (optional - ticket #, who, what...)</label><input id="mDetail" maxlength="80"></div>
+    <div class="mActions"><button id="mCancel">Cancel</button><button class="primary" id="mGo">▶ Start</button></div>`);
+  const go = () => { const d = $("#mDetail").value.trim();
+    startTimer(d ? `${name} - ${d}` : name); closeModal(); };
+  $("#mGo").onclick = go;
+  $("#mCancel").onclick = closeModal;
+  $("#mDetail").onkeydown = e => { if(e.key==="Enter") go(); if(e.key==="Escape") closeModal(); };
+  setTimeout(()=>$("#mDetail").focus(), 50);
+}
+let _tickDay = todayISO();
+function tick(){
+  const d = todayISO();
+  if(S && d !== _tickDay){ _tickDay = d; dailyCleanup(); if(view==="board") renderBoard(); }
+  const t = S && S.activeTimer;
+  if(!t){ $("#elapsed").textContent = "00:00"; $("#timerTimes").textContent = ""; return; }
+  const st = new Date(t.start);
+  $("#timerTimes").textContent = pad(st.getHours())+":"+pad(st.getMinutes())+" - "+hmNow();
+  const s = Math.floor((Date.now() - st)/1000);
+  $("#elapsed").textContent = s>=3600
+    ? pad(Math.floor(s/3600))+":"+pad(Math.floor(s%3600/60))+":"+pad(s%60)
+    : pad(Math.floor(s/60))+":"+pad(s%60);
+}
+setInterval(tick, 1000);
+$("#stopBtn").onclick = stopTimer;
+
+/* ================= board ================= */
+function renderBoard(){
+  const board = $("#board"); board.innerHTML = "";
+  COLS.forEach(([key,label])=>{
+    const col = document.createElement("div"); col.className = "col"; col.dataset.col = key;
+    const tasks = S.tasks.filter(t=>t.column===key);
+    col.innerHTML = `<h2>${label}<span><button class="ghost small" title="Add task with full details" style="padding:1px 8px;margin-right:6px">＋</button><span class="muted">${tasks.length}</span></span></h2>`;
+    col.querySelector("h2 button").onclick = () => taskModal(null, key);
+    tasks.forEach(t => col.appendChild(cardEl(t)));
+    col.ondragover = e => { e.preventDefault(); col.classList.add("dragover"); };
+    col.ondragleave = () => col.classList.remove("dragover");
+    col.ondrop = e => { e.preventDefault(); col.classList.remove("dragover");
+      const t = S.tasks.find(x=>x.id===e.dataTransfer.getData("id"));
+      if(t){ t.column = key; if(key!=="today") t.slot=null;
+        t.doneAt = key==="done" ? todayISO() : null;
+        markDirty(); renderBoard(); } };
+    board.appendChild(col);
+  });
+}
+function dailyCleanup(){
+  const today = todayISO();
+  S.tasks.forEach(t=>{ if(t.column==="done" && !t.doneAt) t.doneAt = today; });
+  const n = S.tasks.length;
+  S.tasks = S.tasks.filter(t => !(t.column==="done" && t.doneAt < today));
+  if(S.tasks.length !== n) markDirty();
+}
+function cardEl(t){
+  const el = document.createElement("div");
+  el.className = "card"; el.draggable = true;
+  el.style.borderLeftColor = catColor(t.category);
+  el.innerHTML = `<div class="title">${esc(t.title)}</div>
+    <div class="meta">${badgeHtml(t.category)}
+    <span>${t.est||30}m</span>${t.slot?`<span>@${t.slot}</span>`:""}
+    <span class="metaSpacer"></span>
+    <button title="Start timer">▶</button><button title="Edit">✎</button></div>`;
+  el.ondragstart = e => e.dataTransfer.setData("id", t.id);
+  const [play, edit] = el.querySelectorAll("button");
+  play.onclick = () => startTimer(t.title, t.id);
+  edit.onclick = () => taskModal(t);
+  return el;
+}
+function taskModal(t, col){
+  const isNew = !t;
+  if(isNew) t = { title:"", category:defCat(), column:col||"today", est:30, slot:null };
+  openModal(`<h3>${isNew?"New task":"Edit task"}</h3>
+    <div class="fRow"><label>Title</label><input id="mTitle" value="${esc(t.title)}"></div>
+    <div class="fRow"><label>Category</label><select id="mCat">${getCats().map(c=>`<option value="${c.k}"${t.category===c.k?" selected":""}>${esc(c.label)}</option>`).join("")}</select></div>
+    <div class="fRow"><label>Column</label><select id="mCol">${COLS.map(([k,l])=>`<option value="${k}"${t.column===k?" selected":""}>${l}</option>`).join("")}</select></div>
+    <div class="fRow"><label>Estimate (minutes)</label><input id="mEst" type="number" min="5" step="5" value="${t.est||30}"></div>
+    <div class="mActions">${isNew?"":'<button class="danger" id="mDel">Delete</button>'}<button id="mCancel">Cancel</button><button class="primary" id="mSave">${isNew?"Add":"Save"}</button></div>`);
+  const save = () => {
+    const title = $("#mTitle").value.trim();
+    if(!title){ alert("Title is required."); return; }
+    t.title = title; t.category = $("#mCat").value;
+    t.column = $("#mCol").value; t.est = +$("#mEst").value || 30;
+    if(t.column !== "today") t.slot = null;
+    t.doneAt = t.column==="done" ? (t.doneAt || todayISO()) : null;
+    if(isNew) S.tasks.push({id:uid(), ...t});
+    markDirty(); closeModal(); renderBoard(); if(view==="today") renderToday();
+  };
+  $("#mSave").onclick = save;
+  $("#mTitle").onkeydown = e => { if(e.key==="Enter") save(); };
+  if(!isNew) $("#mDel").onclick = () => { S.tasks = S.tasks.filter(x=>x.id!==t.id); markDirty(); closeModal(); renderBoard(); if(view==="today") renderToday(); };
+  $("#mCancel").onclick = closeModal;
+  if(isNew) setTimeout(()=>$("#mTitle").focus(), 50);
+}
+
+/* ================= today ================= */
+async function fetchCal(d, force){
+  if(!force && calCache[d]) return calCache[d];
+  const r = await fetch(`/api/calendar?date=${d}${force?"&refresh=1":""}`);
+  const j = await r.json();
+  if(j.error) return calCache[d] = {events:[], error:j.error};
+  return calCache[d] = j;
+}
+async function renderToday(force){
+  const cal = await fetchCal(todayISO(), force);
+  const note = cal.error ? "Calendar: "+cal.error : (cal.warn ? "Calendar: "+cal.warn : "");
+  $("#calNotice").style.display = note ? "" : "none";
+  if(note) $("#calNotice").textContent = note;
+  const startM = hmToMin(S.settings.dayStart||"08:00"), endM = hmToMin(S.settings.dayEnd||"18:00");
+  const tl = $("#timeline");
+  // scale the day to fill the window below the timeline's top edge (min 0.7 px/min, then it scrolls)
+  const avail = window.innerHeight - tl.getBoundingClientRect().top - 18;
+  const pxPerMin = Math.max(0.7, avail / (endM - startM));
+  tl.style.height = (endM-startM)*pxPerMin + "px"; tl.innerHTML = "";
+  for(let h=Math.ceil(startM/60); h*60<=endM; h++){
+    const row = document.createElement("div"); row.className="hourRow";
+    row.style.top = (h*60-startM)*pxPerMin+"px"; row.textContent = pad(h)+":00";
+    tl.appendChild(row);
+  }
+  const put = (topM, durM, cls, html, onclick, bg) => {
+    const b = document.createElement("div"); b.className = "block "+cls;
+    b.style.top = (topM-startM)*pxPerMin+"px";
+    b.style.height = Math.max(16, durM*pxPerMin-2)+"px";
+    if(bg){ b.style.background = bg; b.style.color = txtOn(bg); }
+    b.innerHTML = html; if(onclick) b.onclick = onclick;
+    tl.appendChild(b); return b;
+  };
+  const ignoreEv = (S.settings.ignoreEvents || ["Private Appointment"]).map(x=>x.toLowerCase().trim()).filter(Boolean);
+  const timedEvents = cal.events.filter(e=>!e.allDay && !ignoreEv.includes((e.title||"").toLowerCase().trim()));
+  timedEvents.forEach(e=>{
+    const s = new Date(e.start), en = new Date(e.end);
+    put(s.getHours()*60+s.getMinutes(), (en-s)/60000, "cal",
+      `<span class="t">${esc(e.title)}</span>${e.location?` <span class="small">· ${esc(e.location)}</span>`:""}`);
+  });
+  const todayTasks = S.tasks.filter(t=>t.column==="today");
+  todayTasks.filter(t=>t.slot).forEach(t=>{
+    const c = catColor(t.category);
+    const b = put(hmToMin(t.slot), t.est||30, "task", `<span class="t">${esc(t.title)}</span>`, null, c);
+    b.title = "Drag to move, click to edit";
+    b.addEventListener("pointerdown", e => {
+      if(e.button !== 0) return;
+      e.preventDefault(); b.setPointerCapture(e.pointerId);
+      const sy = e.clientY, origTop = parseFloat(b.style.top), blkH = b.offsetHeight;
+      let moved = false;
+      const mv = ev => {
+        const dy = ev.clientY - sy;
+        if(Math.abs(dy) > 3) moved = true;
+        if(moved){
+          b.style.top = Math.min((endM-startM)*pxPerMin - blkH, Math.max(0, origTop + dy)) + "px";
+          b.style.zIndex = 10;
+        }
+      };
+      const up = () => {
+        b.removeEventListener("pointermove", mv);
+        b.removeEventListener("pointerup", up); b.removeEventListener("pointercancel", up);
+        if(!moved){ taskModal(t); return; }
+        let m = startM + parseFloat(b.style.top) / pxPerMin;
+        m = Math.round(m / 5) * 5;                                  // snap to 5 min
+        m = Math.min(endM - (t.est||30), Math.max(startM, m));      // stay inside the day
+        t.slot = minToHM(m); markDirty(); renderToday();
+      };
+      b.addEventListener("pointermove", mv);
+      b.addEventListener("pointerup", up);
+      b.addEventListener("pointercancel", up);
+    });
+  });
+  const nowM = hmToMin(hmNow());
+  if(nowM>=startM && nowM<=endM) put(nowM, 0, "now", "");
+
+  // free-gap finder for auto-slot
+  const busy = timedEvents.map(e=>{const s=new Date(e.start),en=new Date(e.end);
+    return [s.getHours()*60+s.getMinutes(), en.getHours()*60+en.getMinutes()];})
+    .concat(todayTasks.filter(t=>t.slot).map(t=>[hmToMin(t.slot), hmToMin(t.slot)+(t.est||30)]))
+    .sort((a,b)=>a[0]-b[0]);
+  const firstGap = need => {
+    let cur = Math.max(startM, nowM);
+    for(const [s,e] of busy){ if(s - cur >= need) break; cur = Math.max(cur, e); }
+    return cur + need <= endM ? cur : null;
+  };
+
+  const un = $("#unslotted"), sl = $("#slotted"); un.innerHTML=""; sl.innerHTML="";
+  todayTasks.forEach(t=>{
+    const row = document.createElement("div"); row.className="slotItem";
+    if(!t.slot){
+      row.innerHTML = `<span class="badge" style="background:${catColor(t.category)}">&nbsp;</span><span class="nm">${esc(t.title)} <span class="muted small">(${t.est||30}m)</span></span>
+        <input type="time"><button>Slot</button><button class="ghost">Auto</button>`;
+      const [inp] = row.querySelectorAll("input"), [btn, auto] = row.querySelectorAll("button");
+      btn.onclick = () => { if(inp.value){ t.slot = inp.value; markDirty(); renderToday(); } };
+      auto.onclick = () => { const g = firstGap(t.est||30);
+        if(g==null){ alert("No free gap fits before end of day."); return; }
+        t.slot = minToHM(g); markDirty(); renderToday(); };
+      un.appendChild(row);
+    } else {
+      row.innerHTML = `<span class="badge" style="background:${catColor(t.category)}">&nbsp;</span><span class="nm">${esc(t.title)}</span>
+        <span class="small muted">@${t.slot}</span><button title="Start timer">▶</button><button class="ghost">Unslot</button>`;
+      const [play, unbtn] = row.querySelectorAll("button");
+      play.onclick = () => startTimer(t.title, t.id);
+      unbtn.onclick = () => { t.slot=null; markDirty(); renderToday(); };
+      sl.appendChild(row);
+    }
+  });
+  if(!todayTasks.length) un.innerHTML = `<span class="muted small">No tasks in Today column.</span>`;
+}
+$("#calRefresh").onclick = () => renderToday(true);
+
+/* ================= notes ================= */
+function renderNotes(){
+  const wrap = $("#notes"); wrap.innerHTML = "";
+  S.notes.forEach(sec=>{
+    const p = document.createElement("div"); p.className = "panel";
+    p.innerHTML = `<h3 style="display:flex;align-items:center;gap:8px"><span>${esc(sec.title)}</span>
+      <button class="ghost small" style="margin-left:auto" title="Delete section">✕</button></h3>
+      <div class="items"></div>
+      <div class="addRow"><input placeholder="Add note..."><button>+</button></div>`;
+    p.querySelector("h3 button").onclick = () => {
+      if(sec.items.length && !confirm(`Delete section “${sec.title}” and its notes?`)) return;
+      S.notes = S.notes.filter(x=>x.id!==sec.id); markDirty(); renderNotes();
+    };
+    const items = p.querySelector(".items");
+    sec.items.forEach(it=>{
+      const row = document.createElement("div"); row.className="noteItem";
+      row.innerHTML = `<div class="tx" contenteditable="true">${esc(it.text)}</div><button class="ghost small">✕</button>`;
+      row.querySelector(".tx").onblur = e => { it.text = e.target.innerText.trim(); markDirty(); };
+      row.querySelector("button").onclick = () => { sec.items = sec.items.filter(x=>x.id!==it.id); markDirty(); renderNotes(); };
+      items.appendChild(row);
+    });
+    const inp = p.querySelector(".addRow input");
+    const add = () => { if(!inp.value.trim()) return;
+      sec.items.push({id:uid(), text:inp.value.trim()}); inp.value=""; markDirty(); renderNotes(); };
+    p.querySelector(".addRow button").onclick = add;
+    inp.onkeydown = e => { if(e.key==="Enter") add(); };
+    wrap.appendChild(p);
+  });
+}
+$("#addSection").onclick = () => {
+  const v = $("#newSection").value.trim(); if(!v) return;
+  S.notes.push({id:uid(), title:v, items:[]}); $("#newSection").value=""; markDirty(); renderNotes();
+};
+
+/* ================= snippet / clipboard libraries ================= */
+const LIBS = { snips:{key:"snippets", label:"snippet", ph:"# code..."},
+               paste:{key:"pastes", label:"paste block", ph:"Markdown supported: **bold**, `code`, ``` blocks, - lists, [links](https://...)", md:true} };
+const libFilter = {snips:"", paste:""}, libSearch = {snips:"", paste:""};
+
+function moveLibItem(kind, id, dir){
+  const arr = S[LIBS[kind].key];
+  const i = arr.findIndex(x=>x.id===id), j = i + dir;
+  if(i<0 || j<0 || j>=arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  markDirty(); renderLibGrid(kind);
+}
+
+function mdRender(src){
+  const fences = [];
+  let s = src.replace(/```(?:\w*\n)?([\s\S]*?)```/g, (m,c)=>{
+    fences.push(c.replace(/\n$/,"")); return "\u0000"+(fences.length-1)+"\u0000"; });
+  s = esc(s);
+  s = s.replace(/^### (.*)$/gm,"<h4>$1</h4>")
+       .replace(/^## (.*)$/gm,"<h3>$1</h3>")
+       .replace(/^# (.*)$/gm,"<h2>$1</h2>");
+  s = s.replace(/`([^`\n]+)`/g,"<code>$1</code>");
+  s = s.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>")
+       .replace(/(^|[\s(])\*([^*\n]+)\*/g,"$1<em>$2</em>");
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/(?:^|\n)((?:[-*] .*(?:\n|$))+)/g, m =>
+    "\n<ul>"+m.trim().split(/\n/).map(l=>"<li>"+l.replace(/^[-*] /,"")+"</li>").join("")+"</ul>");
+  s = s.replace(/(?:^|\n)((?:\d+\. .*(?:\n|$))+)/g, m =>
+    "\n<ol>"+m.trim().split(/\n/).map(l=>"<li>"+l.replace(/^\d+\. /,"")+"</li>").join("")+"</ol>");
+  s = s.replace(/\n{2,}/g,"<br><br>").replace(/\n/g,"<br>");
+  s = s.replace(/<br>(?=<(?:h\d|ul|ol))/g,"").replace(/(<\/(?:h\d|ul|ol)>)<br>/g,"$1");
+  s = s.replace(/\u0000(\d+)\u0000/g,(m,i)=>`<pre class="mdCode">${esc(fences[+i])}</pre>`);
+  return s;
+}
+
+function renderLib(kind){
+  const cfg = LIBS[kind], list = S[cfg.key] = S[cfg.key] || [];
+  const sec = $("#view-"+kind);
+  const cats = [...new Set(list.map(i=>i.category).filter(Boolean))].sort();
+  if(libFilter[kind] && !cats.includes(libFilter[kind])) libFilter[kind] = "";
+  sec.innerHTML = `<div class="libBar">
+      <button class="primary" data-add>+ Add ${cfg.label}</button>
+      <div class="libChips">
+        <button class="chip${!libFilter[kind]?" active":""}" data-cat="">All</button>
+        ${cats.map(c=>`<button class="chip${libFilter[kind]===c?" active":""}" data-cat="${esc(c)}">${esc(c)}</button>`).join("")}
+      </div>
+      <input data-search placeholder="Search..." value="${esc(libSearch[kind])}">
+    </div><div class="libGrid"></div>`;
+  sec.querySelector("[data-add]").onclick = () => libModal(kind, null);
+  sec.querySelectorAll("[data-cat]").forEach(b=>{
+    b.onclick = () => { libFilter[kind] = b.dataset.cat; renderLib(kind); };
+  });
+  const si = sec.querySelector("[data-search]");
+  si.oninput = () => { libSearch[kind] = si.value; renderLibGrid(kind); };
+  renderLibGrid(kind);
+}
+function renderLibGrid(kind){
+  const cfg = LIBS[kind], grid = $("#view-"+kind+" .libGrid");
+  const q = libSearch[kind].toLowerCase(), f = libFilter[kind];
+  const items = (S[cfg.key]||[]).filter(i =>
+    (!f || i.category===f) &&
+    (!q || [i.title,i.category,i.desc,i.body].join(" ").toLowerCase().includes(q)));
+  grid.innerHTML = "";
+  if(!items.length){ grid.innerHTML = `<span class="muted small">Nothing here yet - hit “+ Add ${cfg.label}”.</span>`; return; }
+  items.forEach(it=>{
+    const full = S[cfg.key], i = full.findIndex(x=>x.id===it.id);
+    const card = document.createElement("div"); card.className = "panel libCard";
+    card.innerHTML = `<div class="hd"><strong>${esc(it.title)}</strong></div>
+      <div class="hd2">${it.category?`<span class="tagB">${esc(it.category)}</span>`:""}
+        <span style="margin-left:auto"></span>
+        <button data-up class="ghost small" title="Move up"${i===0?" disabled":""}>&#9650;</button>
+        <button data-down class="ghost small" title="Move down"${i===full.length-1?" disabled":""}>&#9660;</button>
+        <button data-copy class="primary">Copy</button><button data-edit title="Edit">✎</button></div>
+      <div class="small muted desc">${esc(it.desc||"")}</div>
+      ${cfg.md ? `<div class="libBody mdBody" title="Click to copy formatted text">${mdRender(it.body)}</div>`
+               : `<pre class="libBody" title="Click to copy">${esc(it.body)}</pre>`}`;
+    card.querySelector("[data-up]").onclick = () => moveLibItem(kind, it.id, -1);
+    card.querySelector("[data-down]").onclick = () => moveLibItem(kind, it.id, 1);
+    const doCopy = async () => {
+      try {
+        if(cfg.md && window.ClipboardItem && navigator.clipboard.write){
+          await navigator.clipboard.write([new ClipboardItem({
+            "text/html": new Blob([mdRender(it.body)], {type:"text/html"}),
+            "text/plain": new Blob([it.body], {type:"text/plain"}),
+          })]);
+        } else {
+          await navigator.clipboard.writeText(it.body);
+        }
+      } catch(err){ await navigator.clipboard.writeText(it.body); }
+      const btn = card.querySelector("[data-copy]"), pre = card.querySelector(".libBody");
+      btn.textContent = "✓ Copied"; pre.classList.add("flash");
+      setTimeout(()=>{ btn.textContent = "Copy"; pre.classList.remove("flash"); }, 1200);
+    };
+    card.querySelector("[data-copy]").onclick = doCopy;
+    card.querySelector(".libBody").onclick = e => { if(e.target.closest("a")) return; doCopy(); };
+    card.querySelector("[data-edit]").onclick = () => libModal(kind, it);
+    grid.appendChild(card);
+  });
+}
+function libModal(kind, it){
+  const cfg = LIBS[kind], isNew = !it;
+  const cats = [...new Set((S[cfg.key]||[]).map(i=>i.category).filter(Boolean))];
+  const n = S[cfg.key].length;
+  const curPos = isNew ? n+1 : S[cfg.key].findIndex(x=>x.id===it.id)+1;
+  openModal(`<h3>${isNew?"Add":"Edit"} ${cfg.label}</h3>
+    <div class="fRow"><label>Title</label><input id="mTitle" value="${esc(it?.title||"")}"></div>
+    <div class="fRow"><label>Category</label><input id="mCat" list="catList" maxlength="20" value="${esc(it?.category||"")}" placeholder="e.g. PowerShell, Graph API...">
+      <datalist id="catList">${cats.map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>
+    <div class="fRow"><label>Description</label><input id="mDesc" value="${esc(it?.desc||"")}"></div>
+    <div class="fRow"><label>Content</label><textarea id="mBody" rows="9" spellcheck="false"
+      style="font-family:ui-monospace,monospace;font-size:12px" placeholder="${cfg.ph}">${esc(it?.body||"")}</textarea></div>
+    ${isNew?"":`<div class="fRow"><label>Position (1-${n})</label><input id="mPos" type="number" min="1" max="${n}" value="${curPos}" style="width:80px"></div>`}
+    <div class="mActions">${isNew?"":'<button class="danger" id="mDel">Delete</button>'}
+      <button id="mCancel">Cancel</button><button class="primary" id="mSave">Save</button></div>`);
+  $("#mSave").onclick = () => {
+    const title = $("#mTitle").value.trim(), body = $("#mBody").value;
+    if(!title || !body.trim()){ alert("Title and content are required."); return; }
+    const rec = { title, category: $("#mCat").value.trim().slice(0,20), desc: $("#mDesc").value.trim(), body };
+    if(isNew){
+      S[cfg.key].push({id:uid(), ...rec});
+    } else {
+      Object.assign(it, rec);
+      const from = S[cfg.key].findIndex(x=>x.id===it.id);
+      let to = Math.round(+$("#mPos").value) - 1;
+      to = Math.max(0, Math.min(S[cfg.key].length-1, isNaN(to)?from:to));
+      if(to !== from){ S[cfg.key].splice(from,1); S[cfg.key].splice(to,0,it); }
+    }
+    markDirty(); closeModal(); renderLib(kind);
+  };
+  if(!isNew) $("#mDel").onclick = () => {
+    if(!confirm(`Delete "${it.title}"?`)) return;
+    S[cfg.key] = S[cfg.key].filter(x=>x.id!==it.id); markDirty(); closeModal(); renderLib(kind);
+  };
+  $("#mCancel").onclick = closeModal;
+  setTimeout(()=>$("#mTitle").focus(), 50);
+}
+
+/* ================= export ================= */
+async function importCalToLog(d){
+  S.calSeen = S.calSeen || {};
+  const seen = S.calSeen[d] = S.calSeen[d] || [];
+  const cal = await fetchCal(d);
+  if(cal.error){ $("#expNotice").style.display=""; $("#expNotice").textContent="Calendar: "+cal.error; return; }
+  $("#expNotice").style.display = cal.warn ? "" : "none";
+  if(cal.warn) $("#expNotice").textContent = "Calendar: "+cal.warn;
+  let changed = false;
+  const ignore = (S.settings.ignoreEvents || ["Private Appointment"]).map(x=>x.toLowerCase().trim()).filter(Boolean);
+  (cal.events||[]).filter(e=>!e.allDay).forEach(ev=>{
+    if(ignore.includes((ev.title||"").toLowerCase().trim())) return;   // skip ignored event titles
+    const key = ev.start + "|" + ev.title;
+    if(seen.includes(key)) return;                 // already imported (or deleted) - don't resurrect
+    seen.push(key);
+    const s = new Date(ev.start), en = new Date(ev.end);
+    S.timelog.push({ id:uid(), date:d, label:ev.title, taskId:null, source:"cal", category:"meeting",
+      start: pad(s.getHours())+":"+pad(s.getMinutes()), end: pad(en.getHours())+":"+pad(en.getMinutes()),
+      minutes: Math.max(1, Math.round((en - s)/60000)) });
+    changed = true;
+  });
+  if(changed) markDirty();
+}
+async function renderExport(){
+  const d = $("#expDate").value || todayISO(); $("#expDate").value = d;
+  try { await importCalToLog(d); } catch(e){ /* calendar issues shouldn't blank the table */ }
+  const entries = S.timelog.filter(e=>e.date===d).sort((a,b)=>a.start.localeCompare(b.start));
+  const tb = $("#entryRows"); tb.innerHTML = "";
+  entries.forEach(e=>{
+    const c = entCat(e);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><div class="labCell"><span title="${e.source==="cal"?"from calendar":"task/timer entry"}">${e.source==="cal"?"📅":"📋"}</span><input value="${esc(e.label)}"></div></td>
+      <td><select>${allCats().map(cc=>`<option value="${cc.k}"${c===cc.k?" selected":""}>${esc(cc.label)}</option>`).join("")}</select></td>
+      <td><input type="time" value="${e.start}"></td><td><input type="time" value="${e.end}"></td>
+      <td><input type="number" min="1" value="${e.minutes}"></td>
+      <td class="rowActs"><span class="actWrap"><button class="ghost small" data-save title="Save changes" disabled>💾</button><button class="ghost small danger" data-del title="Delete">✕</button></span></td>`;
+    const [lab, st, en, mi] = tr.querySelectorAll("input"), catSel = tr.querySelector("select");
+    const saveBtn = tr.querySelector("[data-save]");
+    const dirtyRow = () => { saveBtn.disabled = false; tr.classList.add("rowDirty"); };
+    // auto-fill minutes from start/end while typing, but DON'T re-render (no jump)
+    const syncMins = () => { const diff = hmToMin(en.value) - hmToMin(st.value); if(diff > 0) mi.value = diff; };
+    lab.oninput = dirtyRow; catSel.onchange = dirtyRow; mi.oninput = dirtyRow;
+    st.oninput = () => { syncMins(); dirtyRow(); };
+    en.oninput = () => { syncMins(); dirtyRow(); };
+    const commit = () => {
+      e.label = lab.value; e.category = catSel.value;
+      e.start = st.value; e.end = en.value; e.minutes = +mi.value || 1;
+      markDirty(); renderExport();          // re-sort + refresh totals only on Save
+    };
+    saveBtn.onclick = commit;
+    // Enter in any field of the row saves it
+    tr.querySelectorAll("input").forEach(inp => inp.addEventListener("keydown", ev => { if(ev.key==="Enter") commit(); }));
+    tr.querySelector("[data-del]").onclick = () => { S.timelog = S.timelog.filter(x=>x.id!==e.id); markDirty(); renderExport(); };
+    tb.appendChild(tr);
+  });
+  const round = +S.settings.rounding || 1;
+  const rnd = m => Math.max(round, Math.round(m/round)*round);
+  let out;
+  const dateHdr = new Date(d+"T12:00").toLocaleDateString(undefined,{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
+  if($("#expRaw").checked){
+    const agg = {};
+    entries.forEach(e=>{ agg[e.label] = (agg[e.label]||0) + e.minutes; });
+    out = dateHdr+"\n"+Object.entries(agg).map(([label,m])=>`- ${ascii(label)} - ${fmtDur(rnd(m))}`).join("\n");
+  } else {
+    out = dateHdr+"\n"+entries.map(e=>`${e.start}-${e.end}  ${ascii(e.label)} - ${fmtDur(rnd(e.minutes))}`).join("\n");
+  }
+  if(entries.length){
+    const first = Math.min(...entries.map(e=>hmToMin(e.start)));
+    const last = Math.max(...entries.map(e=>hmToMin(e.end)));
+    out += `\nTotal: ${fmtDur(Math.max(0, last - first))} (${minToHM(first)}-${minToHM(last)})`;
+  } else out += "No entries.";
+  $("#exportText").textContent = out;
+}
+$("#expDate").onchange = renderExport;
+$("#expRaw").onchange = renderExport;
+$("#expCalRefresh").onclick = async () => { await fetchCal($("#expDate").value||todayISO(), true); renderExport(); };
+$("#copyExport").onclick = async () => {
+  await navigator.clipboard.writeText($("#exportText").textContent);
+  $("#copyExport").textContent = "Copied ✓"; setTimeout(()=>$("#copyExport").textContent="Copy to clipboard",1500);
+};
+$("#addEntry").onclick = () => {
+  S.timelog.push({id:uid(), date: $("#expDate").value||todayISO(), label:"Manual entry",
+    taskId:null, category:defCat(), start:hmNow(), end:hmNow(), minutes:15});
+  markDirty(); renderExport();
+};
+
+/* ---- bulk export ---- */
+let bulkRows = [];
+async function bulkGenerate(){
+  const f = $("#bulkFrom").value, t = $("#bulkTo").value;
+  if(!f || !t || f > t){ alert("Pick a valid from/to range."); return; }
+  const days = [];
+  for(let d = new Date(f+"T12:00"); days.length < 93; d.setDate(d.getDate()+1)){
+    const iso = d.toISOString().slice(0,10);
+    if(iso > t) break; days.push(iso);
+  }
+  $("#bulkText").textContent = "Importing calendar for "+days.length+" day(s)...";
+  for(const d of days){ try { await importCalToLog(d); } catch(e){} }
+  const round = +S.settings.rounding || 1;
+  const rnd = m => Math.max(round, Math.round(m/round)*round);
+  // one row per entry with its own times, sorted by date then start
+  bulkRows = S.timelog
+    .filter(e => e.date >= f && e.date <= t)
+    .sort((a,b) => (a.date+a.start).localeCompare(b.date+b.start))
+    .map(e => [e.date, e.start, e.end, ascii(e.label), catName(entCat(e)), fmtDur(rnd(e.minutes))]);
+  const header = ["Date","Start","End","Task","Category","Time"];
+  $("#bulkText").textContent = bulkRows.length
+    ? header.join("\t") + "\n" + bulkRows.map(r=>r.join("\t")).join("\n")
+    : "No entries in range.";
+}
+$("#bulkGen").onclick = bulkGenerate;
+$("#bulkCopy").onclick = async () => {
+  await navigator.clipboard.writeText($("#bulkText").textContent);
+  $("#bulkCopy").textContent = "Copied ✓"; setTimeout(()=>$("#bulkCopy").textContent="Copy",1500);
+};
+$("#bulkCsv").onclick = () => {
+  if(!bulkRows.length){ alert("Generate first."); return; }
+  const q = s => `"${String(s).replace(/"/g,'""')}"`;
+  const csv = "Date,Start,End,Task,Category,Time\n" + bulkRows.map(r=>r.map(q).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\uFEFF"+csv], {type:"text/csv;charset=utf-8"}));
+  a.download = `timesheet_${$("#bulkFrom").value}_${$("#bulkTo").value}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+};
+
+/* ================= settings modal ================= */
+$("#settingsBtn").onclick = () => {
+  const s = S.settings;
+  openModal(`<h3>Settings</h3>
+    <div class="fRow"><label>Exchange published calendar ICS URL</label><input id="sIcs" value="${esc(s.icsUrl||"")}" placeholder="https://outlook.office365.com/owa/calendar/.../calendar.ics"></div>
+    <div class="fRow"><label>...or upload a .ics file (used as fallback if the URL is empty or unreachable)</label>
+      <input type="file" id="sIcsFile" accept=".ics,text/calendar">
+      <span class="small muted" id="sIcsStatus"></span></div>
+    <div class="fRow"><label>Theme</label><select id="sTheme">
+      ${THEMES.map(([k,l])=>`<option value="${k}"${s.theme===k?" selected":""}>${l}</option>`).join("")}</select></div>
+    <div class="fRow"><label>Font</label><select id="sFont">
+      ${FONTS.map(([k,l])=>`<option value="${k}"${s.font===k?" selected":""}>${l}</option>`).join("")}</select></div>
+    <div class="fRow"><label>Work day start / end</label>
+      <div style="display:flex;gap:8px"><input id="sStart" type="time" value="${s.dayStart}"><input id="sEnd" type="time" value="${s.dayEnd}"></div></div>
+    <div class="fRow"><label>Round export durations to (minutes)</label><input id="sRound" type="number" min="1" value="${s.rounding||5}"></div>
+    <div class="fRow"><label>Slotted-task reminders</label>
+      <div style="display:flex;gap:10px;align-items:center">
+        <label class="small"><input type="checkbox" id="sRemind"${s.remind!==false?" checked":""}> enabled</label>
+        <input id="sLead" type="number" min="0" max="120" value="${s.remindLead||0}" style="width:70px">
+        <span class="small muted">min before slot time</span>
+      </div></div>
+    <div class="fRow"><label>Task categories</label><div id="sCats"></div>
+      <button id="sCatAdd" class="ghost small" type="button">+ Add category</button></div>
+    <div class="fRow"><label>Interrupt quick-timers (one per line)</label><textarea id="sInt" rows="4">${esc((s.interrupts||[]).join("\n"))}</textarea></div>
+    <div class="fRow"><label>Ignore calendar events with these titles (one per line - not logged)</label><textarea id="sIgnore" rows="2">${esc((s.ignoreEvents||["Private Appointment"]).join("\n"))}</textarea></div>
+    <div class="mActions"><button id="mCancel">Cancel</button><button class="primary" id="mSave">Save</button></div>`);
+  $("#sTheme").onchange = e => document.body.dataset.theme = e.target.value;
+  $("#sFont").onchange = e => document.body.dataset.font = e.target.value;
+  // --- category manager (works on a copy; applied on Save) ---
+  const catsWork = getCats().map(c=>({...c}));
+  function drawCats(){
+    const box = $("#sCats"); box.innerHTML = "";
+    catsWork.forEach((c,i)=>{
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;gap:6px;align-items:center;margin-bottom:5px";
+      row.innerHTML = `<input maxlength="20" value="${esc(c.label)}" style="flex:1;min-width:0">
+        <input type="color" value="${safeColor(c.color)}" style="width:40px;height:30px;padding:2px">
+        <button type="button" class="ghost small danger"${catsWork.length<2?" disabled":""}>✕</button>`;
+      const [lab, col] = row.querySelectorAll("input");
+      lab.onchange = () => c.label = lab.value.trim().slice(0,20) || c.label;
+      col.oninput = () => c.color = col.value;
+      row.querySelector("button").onclick = () => { catsWork.splice(i,1); drawCats(); };
+      box.appendChild(row);
+    });
+  }
+  drawCats();
+  $("#sCatAdd").onclick = () => { catsWork.push({k:"c_"+uid(), label:"New category", color:"#57b76a"}); drawCats(); };
+  $("#sIcsFile").onchange = async e => {
+    const file = e.target.files[0]; if(!file) return;
+    const r = await fetch("/api/calendar/upload", {method:"POST", body: await file.text()});
+    const j = await r.json();
+    $("#sIcsStatus").textContent = j.ok ? `Uploaded ✓ (${Math.round(j.size/1024)} KB)` : (j.error || "Upload failed");
+    calCache = {};
+  };
+  $("#mSave").onclick = () => {
+    Object.assign(s, { icsUrl:$("#sIcs").value.trim(), theme:$("#sTheme").value, font:$("#sFont").value,
+      dayStart:$("#sStart").value, dayEnd:$("#sEnd").value, rounding:+$("#sRound").value||5,
+      remind:$("#sRemind").checked, remindLead:+$("#sLead").value||0,
+      interrupts:$("#sInt").value.split("\n").map(x=>x.trim()).filter(Boolean),
+      ignoreEvents:$("#sIgnore").value.split("\n").map(x=>x.trim()).filter(Boolean),
+      categories: catsWork });
+    const valid = new Set(catsWork.map(c=>c.k));
+    S.tasks.forEach(t=>{ if(!valid.has(t.category)) t.category = defCat(); });
+    S.timelog.forEach(e=>{ if(e.category && e.category!=="meeting" && !valid.has(e.category)) e.category = defCat(); });
+    calCache = {}; markDirty(); applySettings(); closeModal(); renderStrip();
+    if(view==="board") renderBoard();
+    if(view==="today") renderToday(); if(view==="export") renderExport();
+  };
+  $("#mCancel").onclick = () => { applySettings(); closeModal(); };
+};
+function openModal(html){ $("#modalBox").innerHTML = html; $("#modal").classList.add("open"); }
+function closeModal(){ $("#modal").classList.remove("open"); }
+$("#modal").onclick = e => { if(e.target.id==="modal") closeModal(); };
+
+/* ================= nav ================= */
+document.querySelectorAll("nav .tab").forEach(b=>{
+  b.onclick = () => setView(b.dataset.view);
+});
+function setView(v){
+  view = v;
+  document.querySelectorAll("nav .tab").forEach(b=>b.classList.toggle("on", b.dataset.view===v));
+  ["board","today","notes","snips","paste","export"].forEach(x=>$("#view-"+x).style.display = x===v? "":"none");
+  if(v==="board") renderBoard();
+  if(v==="today") renderToday();
+  if(v==="notes") renderNotes();
+  if(v==="snips"||v==="paste") renderLib(v);
+  if(v==="export") renderExport();
+}
+function renderAll(){ renderStrip(); setView(view); }
+
+/* ================= pywebview window controls (desktop widget) ================= */
+function initWinCtrls(){
+  const api = window.pywebview && window.pywebview.api;
+  if(!api || !api.begin) return;
+  $("#winCtrls").style.display = "";
+  $("#resizeGrip").style.display = "";
+  $("#wMin").onclick = () => api.minimize();
+  $("#wClose").onclick = () => api.close();
+  const bindDrag = (el, fn) => {
+    el.addEventListener("pointerdown", e => {
+      if(e.button !== 0) return;
+      e.preventDefault();
+      el.setPointerCapture(e.pointerId);
+      const sx = e.screenX, sy = e.screenY;
+      api.begin();
+      let queued = false, dx = 0, dy = 0;
+      const mv = ev => { dx = ev.screenX - sx; dy = ev.screenY - sy;
+        if(!queued){ queued = true;
+          requestAnimationFrame(()=>{ queued = false; fn(dx, dy); }); } };
+      const up = () => { el.removeEventListener("pointermove", mv);
+        el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); };
+      el.addEventListener("pointermove", mv);
+      el.addEventListener("pointerup", up);
+      el.addEventListener("pointercancel", up);
+    });
+  };
+  const handle = $("#dragHandle");
+  handle.classList.add("draggable"); handle.title = "Drag to move window";
+  bindDrag(handle, (dx,dy)=>api.drag(dx,dy));
+  bindDrag($("#resizeGrip"), (dx,dy)=>api.size(dx,dy));
+}
+window.addEventListener("pywebviewready", initWinCtrls);
+if(window.pywebview) initWinCtrls();
+
+/* ================= slotted-task reminders ================= */
+function checkReminders(){
+  if(!S || S.settings.remind === false) return;
+  if($("#modal").classList.contains("open")) return;   // don't interrupt an open dialog; retries next tick
+  const lead = +S.settings.remindLead || 0;
+  const now = hmToMin(hmNow());
+  const today = todayISO();
+  // Fire only inside a window: from (slot - lead) up to (slot + GRACE) minutes.
+  // Past that grace period the reminder is considered missed and won't pop -
+  // so opening the app late doesn't dump every earlier task on you.
+  const GRACE = 10;
+  const due = S.tasks.find(t => {
+    if(t.column !== "today" || !t.slot) return false;
+    if(t.reminded === today+" "+t.slot) return false;          // already shown for this slot today
+    if(S.activeTimer && S.activeTimer.taskId === t.id) return false;
+    const at = hmToMin(t.slot);
+    return now >= at - lead && now <= at + GRACE;              // only within the window
+  });
+  if(!due) return;
+  due.reminded = today+" "+due.slot; markDirty();
+  try{ if(window.pywebview?.api?.restore) window.pywebview.api.restore(); }catch(e){}
+  reminderModal(due);
+}
+function reminderModal(t){
+  openModal(`<h3>⏰ Task due: ${esc(t.title)}</h3>
+    <p class="muted small" style="margin-bottom:14px">Slotted for ${t.slot} · ${esc(catName(t.category))} · ${t.est||30}m estimate</p>
+    <div class="mActions" style="justify-content:flex-start;flex-wrap:wrap">
+      <button class="primary" id="rStart">▶ Start now</button>
+      <button id="r15">+15m</button><button id="r30">+30m</button><button id="r60">+1h</button>
+      <button class="ghost" id="rDismiss">Dismiss</button></div>`);
+  $("#rStart").onclick = () => { startTimer(t.title, t.id); closeModal(); };
+  const push = mins => () => {
+    const endM = hmToMin(S.settings.dayEnd||"18:00");
+    // push from whichever is later - the slot or now - so a late push always
+    // lands in the future, which means (now < newSlot - lead) and the window
+    // check won't re-fire until that new time actually arrives.
+    let m = Math.max(hmToMin(t.slot), hmToMin(hmNow())) + mins;
+    m = Math.min(endM - (t.est||30), m);
+    t.slot = minToHM(m);
+    t.reminded = null;    // re-arm: it will fire again when the new slot time arrives
+    markDirty(); closeModal(); if(view==="today") renderToday();
+  };
+  $("#r15").onclick = push(15); $("#r30").onclick = push(30); $("#r60").onclick = push(60);
+  $("#rDismiss").onclick = closeModal;
+}
+setInterval(checkReminders, 20000);
+
+let _rzT;
+window.addEventListener("resize", () => {
+  clearTimeout(_rzT);
+  _rzT = setTimeout(()=>{ if(view==="today") renderToday(); }, 150);
+});
+
+window.addEventListener("beforeunload", () => { if(dirty) persistBeacon(); });
+loadState();
+</script>
+</body>
+</html>

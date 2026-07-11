@@ -1,0 +1,8 @@
+flask
+requests
+icalendar
+recurring-ical-events
+tzdata
+# desktop widget (desktop.py)
+pywebview
+pythonnet; sys_platform == "win32"
