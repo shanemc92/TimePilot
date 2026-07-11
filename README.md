@@ -1,4 +1,5 @@
-# TimePilot
+# TimePilot 
+![Logo](docs/logo.png)
 
 A local, single-user cockpit for managing your day: a Kanban task board, a day
 planner that slots tasks around your calendar, a one-at-a-time timer, and a
@@ -40,7 +41,7 @@ the corner of a screen.
 Requires Python 3.9+.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/timepilot.git
+git clone https://github.com/shanemc92/TimePilot.git
 cd timepilot
 
 python -m venv .venv
@@ -52,8 +53,6 @@ python app.py
 
 Then open <http://localhost:5170>.
 
-![TimePilot demo](docs/demo.gif)
-
 Want to try it with example data first? Generate a set before launching:
 
 ```bash
@@ -62,6 +61,9 @@ python sample_data.py                  # creates ./data with example content
 
 The generated data is dated relative to today, so the board and Export tab
 always look populated. Delete `data/` at any point to start fresh.
+
+## Demo
+![TimePilot demo](docs/demo.gif)
 
 ## Calendar (optional)
 
