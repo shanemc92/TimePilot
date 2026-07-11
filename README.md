@@ -1,5 +1,5 @@
 # TimePilot 
-![Logo](docs/logo.png)
+<img src="logo.png" alt="logo" width="150"/>
 
 A local, single-user cockpit for managing your day: a Kanban task board, a day
 planner that slots tasks around your calendar, a one-at-a-time timer, and a
