@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # requirements.in (and by extension requirements.txt, kept in sync
+  # manually via pip-compile - see README "Keeping it patched")
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+
+  # python:3.12-slim in the Dockerfile - picks up new patch/minor tags
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    labels: [dependencies, docker]
+
+  # actions/checkout, docker/build-push-action, etc. in the workflow itself
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: [dependencies, ci]
