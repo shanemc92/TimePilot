@@ -1,0 +1,23 @@
+name: pip-audit
+
+# Catches newly published CVEs against the pinned lockfile between manual
+# reviews - complements the documented pip-compile upgrade workflow.
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
+  pull_request:
+    paths:
+      - "requirements.txt"
+      - "requirements.in"
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install pip-audit
+      - run: pip-audit -r requirements.txt --strict
