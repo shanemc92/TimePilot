@@ -1,29 +1,25 @@
 #!/usr/bin/env python3
-"""Generate example TimePilot data so you can demo the app out of the box.
+"""Seed a demo user with example data so you can try TimePilot out of the box.
 
-    python sample_data.py            # writes to ./data (won't overwrite existing)
-    python sample_data.py --force    # overwrite whatever's in ./data
-    python sample_data.py --dir foo  # write to ./foo instead
+    python sample_data.py                              # user 'demo' / 'demo1234'
+    python sample_data.py --username bob --password mypassword123
+    python sample_data.py --force                       # reset the user's data if they exist
 
-Dates are generated relative to today, so the Today board and the Export tab
-always look populated no matter when you run it. Delete the data folder any
-time to start fresh.
+Run it with the same environment as the app (DATABASE_URL, FLASK_SECRET_KEY,
+TIMEPILOT_MASTER_KEY), against the same database - e.g. inside the container:
+
+    docker compose exec timepilot python sample_data.py
+
+Dates are generated relative to today, so the board and Export tab always
+look populated no matter when you run it.
 """
 import argparse
 import datetime
-import json
-import os
 import sys
 
-FILES = {
-    "settings.json": ["settings"],
-    "tasks.json": ["tasks"],
-    "history.json": ["timelog"],
-    "notes.json": ["notes"],
-    "snippets.json": ["snippets"],
-    "clipboard.json": ["pastes"],
-    "runtime.json": ["activeTimer", "calSeen"],
-}
+from app import app, load_state, save_state, JSON_DOMAINS
+from extensions import db
+from models import User
 
 
 def build():
@@ -102,26 +98,29 @@ def build():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Generate example TimePilot data.")
-    ap.add_argument("--dir", default="data", help="target folder (default: data)")
-    ap.add_argument("--force", action="store_true", help="overwrite existing files")
+    ap = argparse.ArgumentParser(description="Seed a demo user with example data.")
+    ap.add_argument("--username", default="demo")
+    ap.add_argument("--password", default="demo1234")
+    ap.add_argument("--force", action="store_true", help="reset the user's data if the account already exists")
     args = ap.parse_args()
 
-    target = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.dir)
-    existing = [fn for fn in FILES if os.path.exists(os.path.join(target, fn))]
-    if existing and not args.force:
-        print(f"'{args.dir}' already has data ({', '.join(existing)}).")
-        print("Refusing to overwrite. Re-run with --force, or delete the folder first.")
-        return 1
+    with app.app_context():
+        user = User.query.filter_by(username=args.username.lower()).first()
+        if user and not args.force:
+            print(f"User '{args.username}' already exists. Re-run with --force to reset their data.")
+            return 1
+        if not user:
+            user = User(username=args.username.lower())
+            user.set_password(args.password)
+            db.session.add(user)
+            db.session.commit()
+            print(f"Created user '{args.username}'.")
+        else:
+            print(f"Resetting data for existing user '{args.username}'.")
 
-    data = build()
-    os.makedirs(target, exist_ok=True)
-    for fn, keys in FILES.items():
-        payload = {k: data[k] for k in keys}
-        with open(os.path.join(target, fn), "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=1, ensure_ascii=False)
+        save_state(user.id, build())
 
-    print(f"Wrote example data to '{args.dir}/'. Start TimePilot to see it.")
+        print(f"\nLog in at /login\n  username: {args.username}\n  password: {args.password}")
     return 0
 
 
