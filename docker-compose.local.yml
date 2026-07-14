@@ -1,0 +1,40 @@
+# Local-testing overlay - use alongside docker-compose.yml to test against
+# http://localhost without any TLS/reverse-proxy in front.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml \
+#     up --build timepilot postgres
+#
+# THIS FILE IS NOT STANDALONE. It only has partial service definitions
+# (environment/ports overrides) - `build:`/`image:` live in the base file.
+# Running `docker compose -f docker-compose.local.yml up` with just this
+# file, on its own, fails with "service has neither an image nor a build
+# context specified" - both -f flags above are required, base file first.
+#
+# The base file already publishes timepilot on 127.0.0.1:5170, so this
+# overlay doesn't need to touch ports for it - the only thing it still
+# needs to change is the cookie flag, since a real deployment (behind a
+# proxy terminating TLS) needs SESSION_COOKIE_SECURE=true, but testing
+# over plain http://127.0.0.1 needs it off (browsers won't send a Secure
+# cookie over an insecure connection, so login would silently never
+# persist a session without this).
+#
+# Deliberately NOT named docker-compose.override.yml: that filename is
+# auto-loaded by a bare `docker compose up` with no -f flags, and this repo
+# is the same one you deploy from - an override that's invisible-by-default
+# is exactly how "test settings" quietly end up running in production.
+# This file only ever applies when you pass it explicitly.
+#
+# Compose merges the `environment:` map by key, so FLASK_SECRET_KEY,
+# DATABASE_URL, and TIMEPILOT_MASTER_KEY from the base file's environment
+# block are untouched - only SESSION_COOKIE_SECURE is overridden here.
+# Verify the merge yourself any time with:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml config
+
+services:
+  timepilot:
+    environment:
+      SESSION_COOKIE_SECURE: "false"   # cookies need this off over plain http://
+
+  postgres:
+    ports:
+      - "5432:5432"   # optional - lets you `psql` in from the host to inspect data
