@@ -46,6 +46,7 @@ button:hover{border-color:var(--accent)}
 button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:600}
 button.ghost{background:transparent}
 button.danger{color:var(--danger)}
+.errText{color:var(--danger)!important;font-weight:600}
 input,select,textarea{font-family:inherit;font-size:14px;background:var(--surface2);color:var(--text);
   border:1px solid var(--line);border-radius:7px;padding:6px 8px}
 input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
@@ -117,6 +118,8 @@ main{padding:14px;max-width:1400px;margin:0 auto}
 .block{position:absolute;left:56px;right:8px;border-radius:6px;padding:4px 8px;font-size:12px;overflow:hidden;border:1px solid rgba(0,0,0,.25)}
 .block .t{font-weight:600}
 .block.cal{background:var(--cal);color:#fff}
+.block.lunch{background:repeating-linear-gradient(135deg,var(--surface2),var(--surface2) 8px,var(--line) 8px,var(--line) 16px);
+  color:var(--muted);border:1px dashed var(--line);pointer-events:none;font-style:italic}
 .block.task{font-weight:600;cursor:grab;user-select:none;touch-action:none}
 .block.task:active{cursor:grabbing}
 
@@ -147,7 +150,7 @@ main{padding:14px;max-width:1400px;margin:0 auto}
 @media(max-width:1100px){#exportWrap{grid-template-columns:1fr}}
 #exportWrap .panel{min-width:0;overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
-#exportTable{table-layout:fixed;width:100%}
+#exportTable{table-layout:fixed;width:100%;min-width:520px}
 #exportTable th:nth-child(1),#exportTable td:nth-child(1){width:auto}
 #exportTable th:nth-child(2),#exportTable td:nth-child(2){width:88px}
 #exportTable th:nth-child(3),#exportTable td:nth-child(3),
@@ -201,11 +204,6 @@ pre#exportText{background:var(--surface2);border:1px solid var(--line);border-ra
 .notice{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--muted);margin-bottom:10px}
 #saveDot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-left:6px;transition:background .3s}
 #saveDot.dirty{background:var(--accent)}
-#resizeGrip{position:fixed;right:0;bottom:0;width:24px;height:24px;z-index:70;cursor:nwse-resize;
-  display:flex;align-items:flex-end;justify-content:flex-end;padding:0 3px 1px 0;
-  color:var(--muted);font-size:12px;user-select:none;touch-action:none}
-#winCtrls button{padding:3px 10px}
-#dragHandle.draggable{cursor:move;user-select:none;touch-action:none}
 </style>
 </head>
 <body data-theme="dark" data-font="sans">
@@ -223,7 +221,7 @@ pre#exportText{background:var(--surface2);border:1px solid var(--line);border-ra
 </div>
 
 <nav>
-  <h1 id="dragHandle">TimePilot<span id="saveDot" title="save state"></span></h1>
+  <h1>TimePilot<span id="saveDot" title="save state"></span></h1>
   <button class="tab" data-view="board">Board</button>
   <button class="tab" data-view="today">Today</button>
   <button class="tab" data-view="notes">Notes</button>
@@ -232,13 +230,9 @@ pre#exportText{background:var(--surface2);border:1px solid var(--line);border-ra
   <button class="tab" data-view="export">Export</button>
   <span class="spacer"></span>
   <button id="settingsBtn" class="ghost">⚙ Settings</button>
-  <span id="winCtrls" style="display:none">
-    <button id="wMin" title="Minimise">-</button>
-    <button id="wClose" title="Close">✕</button>
-  </span>
+  <button id="logoutBtn" class="ghost" title="Log out">⎋</button>
 </nav>
 </div>
-<div id="resizeGrip" style="display:none" title="Drag to resize">◢</div>
 
 <main>
   <section id="view-board" style="display:none"><div id="board"></div></section>
@@ -335,26 +329,32 @@ const entCat = e => e.category || (e.source==="cal" ? "meeting"
   : ((S.tasks.find(x=>x.id===e.taskId)||{}).category || defCat()));
 let view = "board", calCache = {};
 
-async function loadState(){ S = await (await fetch("/api/state")).json(); dailyCleanup(); applySettings(); renderAll(); }
+async function loadState(){
+  const r = await fetch("/api/state");
+  if(r.status === 401 || r.redirected){ location.href = "/login"; return; }
+  S = await r.json(); dailyCleanup(); applySettings(); renderAll();
+}
 function markDirty(){
   dirty = true; $("#saveDot").classList.add("dirty");
   clearTimeout(saveT); saveT = setTimeout(persist, 600);
 }
-let _persisting = false;
+let _persistPromise = null;
 async function persist(){
-  if(_persisting) { clearTimeout(saveT); saveT = setTimeout(persist, 300); return; }  // don't overlap writes
-  _persisting = true;
+  while(_persistPromise) await _persistPromise;   // don't overlap writes - wait for one already in flight first
   const snapshot = JSON.stringify(S);
-  try {
-    const r = await fetch("/api/state",{method:"PUT",headers:{"Content-Type":"application/json"},body:snapshot});
-    if(!r.ok) throw new Error("save failed "+r.status);
-    // only clear the flag if nothing changed while this write was in flight
-    if(JSON.stringify(S) === snapshot){ dirty = false; $("#saveDot").classList.remove("dirty"); }
-  } catch(e){
-    // leave dirty set so a later markDirty/persist retries; surface nothing intrusive
-  } finally {
-    _persisting = false;
-  }
+  _persistPromise = (async () => {
+    try {
+      const r = await fetch("/api/state",{method:"PUT",headers:{"Content-Type":"application/json"},body:snapshot});
+      if(!r.ok) throw new Error("save failed "+r.status);
+      // only clear the flag if nothing changed while this write was in flight
+      if(JSON.stringify(S) === snapshot){ dirty = false; $("#saveDot").classList.remove("dirty"); }
+    } catch(e){
+      // leave dirty set so a later markDirty/persist retries; surface nothing intrusive
+    } finally {
+      _persistPromise = null;
+    }
+  })();
+  return _persistPromise;
 }
 function persistBeacon(){
   try { navigator.sendBeacon("/api/state", new Blob([JSON.stringify(S)], {type:"application/json"})); }
@@ -547,36 +547,101 @@ async function renderToday(force){
   const note = cal.error ? "Calendar: "+cal.error : (cal.warn ? "Calendar: "+cal.warn : "");
   $("#calNotice").style.display = note ? "" : "none";
   if(note) $("#calNotice").textContent = note;
-  const startM = hmToMin(S.settings.dayStart||"08:00"), endM = hmToMin(S.settings.dayEnd||"18:00");
+  // Work hours bound auto-slotting; the display range is what the timeline actually
+  // shows/allows dragging into - separate on purpose, so occasional out-of-hours work
+  // can be seen and manually placed without "Auto" starting to treat odd hours as normal.
+  const workStartM = hmToMin(S.settings.dayStart||"08:00"), workEndM = hmToMin(S.settings.dayEnd||"18:00");
+  const viewStartM = hmToMin(S.settings.viewStart || S.settings.dayStart || "08:00");
+  const viewEndM = hmToMin(S.settings.viewEnd || S.settings.dayEnd || "18:00");
   const tl = $("#timeline");
   // scale the day to fill the window below the timeline's top edge (min 0.7 px/min, then it scrolls)
   const avail = window.innerHeight - tl.getBoundingClientRect().top - 18;
-  const pxPerMin = Math.max(0.7, avail / (endM - startM));
-  tl.style.height = (endM-startM)*pxPerMin + "px"; tl.innerHTML = "";
-  for(let h=Math.ceil(startM/60); h*60<=endM; h++){
+  const pxPerMin = Math.max(0.7, avail / (viewEndM - viewStartM));
+  tl.style.height = (viewEndM-viewStartM)*pxPerMin + "px"; tl.innerHTML = "";
+  for(let h=Math.ceil(viewStartM/60); h*60<viewEndM; h++){
     const row = document.createElement("div"); row.className="hourRow";
-    row.style.top = (h*60-startM)*pxPerMin+"px"; row.textContent = pad(h)+":00";
+    row.style.top = (h*60-viewStartM)*pxPerMin+"px"; row.textContent = pad(h)+":00";
     tl.appendChild(row);
   }
-  const put = (topM, durM, cls, html, onclick, bg) => {
+  const GUTTER = 56, MARGIN = 8;
+  const put = (topM, durM, cls, html, onclick, bg, colInfo) => {
     const b = document.createElement("div"); b.className = "block "+cls;
-    b.style.top = (topM-startM)*pxPerMin+"px";
+    b.style.top = (topM-viewStartM)*pxPerMin+"px";
     b.style.height = Math.max(16, durM*pxPerMin-2)+"px";
+    if(colInfo && colInfo.totalCols > 1){
+      // side-by-side layout for overlapping items, like Outlook/Google Calendar -
+      // split the available width evenly across however many columns this cluster needs
+      const availW = tl.clientWidth - GUTTER - MARGIN;
+      const colW = availW / colInfo.totalCols;
+      b.style.left = (GUTTER + colInfo.col*colW) + "px";
+      b.style.width = Math.max(24, colW - 3) + "px";
+      b.style.right = "auto";
+    }
     if(bg){ b.style.background = bg; b.style.color = txtOn(bg); }
     b.innerHTML = html; if(onclick) b.onclick = onclick;
     tl.appendChild(b); return b;
   };
+  // Clusters transitively-overlapping items and greedily assigns each a column
+  // (first column whose previous occupant has already ended), then records how
+  // many columns its whole cluster needed - the same layout every day-view
+  // calendar uses so overlapping items sit side by side instead of hiding
+  // each other. Only meetings + slotted tasks participate; lunch and the
+  // "now" line are background/foreground indicators, not competing content.
+  function layoutOverlaps(items){
+    items.sort((a,b)=>a.startM-b.startM);
+    let cluster = [], clusterEnd = -Infinity;
+    const clusters = [];
+    for(const it of items){
+      if(cluster.length && it.startM >= clusterEnd){ clusters.push(cluster); cluster = []; clusterEnd = -Infinity; }
+      cluster.push(it); clusterEnd = Math.max(clusterEnd, it.endM);
+    }
+    if(cluster.length) clusters.push(cluster);
+    for(const cl of clusters){
+      const colEnds = [];   // colEnds[i] = end time of the last item placed in column i
+      for(const it of cl){
+        let placed = false;
+        for(let i=0;i<colEnds.length;i++){
+          if(colEnds[i] <= it.startM){ it.col = i; colEnds[i] = it.endM; placed = true; break; }
+        }
+        if(!placed){ it.col = colEnds.length; colEnds.push(it.endM); }
+      }
+      for(const it of cl) it.totalCols = colEnds.length;
+    }
+    return items;
+  }
+  // lunch block - shown if it overlaps the visible range at all, excluded from auto-slot below
+  const lunchStartM = S.settings.lunchStart ? hmToMin(S.settings.lunchStart) : null;
+  const lunchEndM = S.settings.lunchEnd ? hmToMin(S.settings.lunchEnd) : null;
+  const hasLunch = lunchStartM!=null && lunchEndM!=null && lunchEndM > lunchStartM;
+  if(hasLunch && lunchEndM > viewStartM && lunchStartM < viewEndM){
+    put(Math.max(lunchStartM,viewStartM), Math.min(lunchEndM,viewEndM)-Math.max(lunchStartM,viewStartM),
+      "lunch", `<span class="t">Lunch</span>`);
+  }
   const ignoreEv = (S.settings.ignoreEvents || ["Private Appointment"]).map(x=>x.toLowerCase().trim()).filter(Boolean);
   const timedEvents = cal.events.filter(e=>!e.allDay && !ignoreEv.includes((e.title||"").toLowerCase().trim()));
-  timedEvents.forEach(e=>{
-    const s = new Date(e.start), en = new Date(e.end);
-    put(s.getHours()*60+s.getMinutes(), (en-s)/60000, "cal",
-      `<span class="t">${esc(e.title)}</span>${e.location?` <span class="small">· ${esc(e.location)}</span>`:""}`);
-  });
   const todayTasks = S.tasks.filter(t=>t.column==="today");
-  todayTasks.filter(t=>t.slot).forEach(t=>{
+  const slottedTasks = todayTasks.filter(t=>t.slot);
+
+  // one shared layout pass across meetings + tasks, so an overlap between the
+  // two (not just within one type) still splits side by side correctly
+  const layoutItems = [
+    ...timedEvents.map(e=>{ const s=new Date(e.start), en=new Date(e.end);
+      return { kind:"cal", startM:s.getHours()*60+s.getMinutes(), endM:en.getHours()*60+en.getMinutes(), data:e }; }),
+    ...slottedTasks.map(t=>({ kind:"task", startM:hmToMin(t.slot), endM:hmToMin(t.slot)+(t.est||30), data:t })),
+  ];
+  layoutOverlaps(layoutItems);
+  const colOf = it => ({ col: it.col, totalCols: it.totalCols });
+
+  layoutItems.filter(it=>it.kind==="cal").forEach(it=>{
+    const e = it.data;
+    put(it.startM, it.endM-it.startM, "cal",
+      `<span class="t">${esc(e.title)}</span>${e.location?` <span class="small">· ${esc(e.location)}</span>`:""}`,
+      null, null, colOf(it));
+  });
+  layoutItems.filter(it=>it.kind==="task").forEach(it=>{
+    const t = it.data;
     const c = catColor(t.category);
-    const b = put(hmToMin(t.slot), t.est||30, "task", `<span class="t">${esc(t.title)}</span>`, null, c);
+    const b = put(it.startM, t.est||30, "task", `<span class="t">${esc(t.title)}</span>`, null, c, colOf(it));
     b.title = "Drag to move, click to edit";
     b.addEventListener("pointerdown", e => {
       if(e.button !== 0) return;
@@ -587,7 +652,7 @@ async function renderToday(force){
         const dy = ev.clientY - sy;
         if(Math.abs(dy) > 3) moved = true;
         if(moved){
-          b.style.top = Math.min((endM-startM)*pxPerMin - blkH, Math.max(0, origTop + dy)) + "px";
+          b.style.top = Math.min((viewEndM-viewStartM)*pxPerMin - blkH, Math.max(0, origTop + dy)) + "px";
           b.style.zIndex = 10;
         }
       };
@@ -595,9 +660,9 @@ async function renderToday(force){
         b.removeEventListener("pointermove", mv);
         b.removeEventListener("pointerup", up); b.removeEventListener("pointercancel", up);
         if(!moved){ taskModal(t); return; }
-        let m = startM + parseFloat(b.style.top) / pxPerMin;
-        m = Math.round(m / 5) * 5;                                  // snap to 5 min
-        m = Math.min(endM - (t.est||30), Math.max(startM, m));      // stay inside the day
+        let m = viewStartM + parseFloat(b.style.top) / pxPerMin;
+        m = Math.round(m / 5) * 5;                                       // snap to 5 min
+        m = Math.min(viewEndM - (t.est||30), Math.max(viewStartM, m));   // stay inside the visible range
         t.slot = minToHM(m); markDirty(); renderToday();
       };
       b.addEventListener("pointermove", mv);
@@ -606,17 +671,18 @@ async function renderToday(force){
     });
   });
   const nowM = hmToMin(hmNow());
-  if(nowM>=startM && nowM<=endM) put(nowM, 0, "now", "");
+  if(nowM>=viewStartM && nowM<=viewEndM) put(nowM, 0, "now", "");
 
-  // free-gap finder for auto-slot
+  // free-gap finder for auto-slot - respects WORK HOURS (not the wider display range) and skips lunch
   const busy = timedEvents.map(e=>{const s=new Date(e.start),en=new Date(e.end);
     return [s.getHours()*60+s.getMinutes(), en.getHours()*60+en.getMinutes()];})
     .concat(todayTasks.filter(t=>t.slot).map(t=>[hmToMin(t.slot), hmToMin(t.slot)+(t.est||30)]))
+    .concat(hasLunch ? [[lunchStartM, lunchEndM]] : [])
     .sort((a,b)=>a[0]-b[0]);
   const firstGap = need => {
-    let cur = Math.max(startM, nowM);
+    let cur = Math.max(workStartM, nowM);
     for(const [s,e] of busy){ if(s - cur >= need) break; cur = Math.max(cur, e); }
-    return cur + need <= endM ? cur : null;
+    return cur + need <= workEndM ? cur : null;
   };
 
   const un = $("#unslotted"), sl = $("#slotted"); un.innerHTML=""; sl.innerHTML="";
@@ -628,7 +694,7 @@ async function renderToday(force){
       const [inp] = row.querySelectorAll("input"), [btn, auto] = row.querySelectorAll("button");
       btn.onclick = () => { if(inp.value){ t.slot = inp.value; markDirty(); renderToday(); } };
       auto.onclick = () => { const g = firstGap(t.est||30);
-        if(g==null){ alert("No free gap fits before end of day."); return; }
+        if(g==null){ alert("No free gap fits within work hours today."); return; }
         t.slot = minToHM(g); markDirty(); renderToday(); };
       un.appendChild(row);
     } else {
@@ -906,13 +972,13 @@ let bulkRows = [];
 async function bulkGenerate(){
   const f = $("#bulkFrom").value, t = $("#bulkTo").value;
   if(!f || !t || f > t){ alert("Pick a valid from/to range."); return; }
-  const days = [];
-  for(let d = new Date(f+"T12:00"); days.length < 93; d.setDate(d.getDate()+1)){
-    const iso = d.toISOString().slice(0,10);
-    if(iso > t) break; days.push(iso);
-  }
-  $("#bulkText").textContent = "Importing calendar for "+days.length+" day(s)...";
-  for(const d of days){ try { await importCalToLog(d); } catch(e){} }
+  // Deliberately does NOT re-fetch/re-import the calendar for each day here -
+  // whatever's already in a day's Entries screen is treated as final (you may
+  // have corrected a meeting that ran over/under, or removed one entirely,
+  // and a bulk report is not the place to second-guess that). Visiting the
+  // Export tab for a given day is what syncs its calendar entries in the
+  // first place; a day never visited simply won't have any calendar-derived
+  // rows here yet.
   const round = +S.settings.rounding || 1;
   const rnd = m => Math.max(round, Math.round(m/round)*round);
   // one row per entry with its own times, sorted by date then start
@@ -945,6 +1011,15 @@ $("#bulkCsv").onclick = () => {
 $("#settingsBtn").onclick = () => {
   const s = S.settings;
   openModal(`<h3>Settings</h3>
+    <div class="fRow"><label>Backup</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button id="sExport" type="button">⬇ Export data</button>
+        <label class="ghost small" style="padding:5px 10px;border:1px solid var(--line);border-radius:7px;cursor:pointer">
+          ⬆ Import data<input type="file" id="sImportFile" accept=".json,application/json" style="display:none">
+        </label>
+        <span class="small muted" id="sImportStatus"></span>
+      </div>
+      <span class="small muted">Export downloads a JSON file with all your tasks, notes, snippets, clipboard items, and settings. Import <strong>replaces</strong> everything currently in your account with the contents of a previously exported file.</span></div>
     <div class="fRow"><label>Exchange published calendar ICS URL</label><input id="sIcs" value="${esc(s.icsUrl||"")}" placeholder="https://outlook.office365.com/owa/calendar/.../calendar.ics"></div>
     <div class="fRow"><label>...or upload a .ics file (used as fallback if the URL is empty or unreachable)</label>
       <input type="file" id="sIcsFile" accept=".ics,text/calendar">
@@ -953,8 +1028,21 @@ $("#settingsBtn").onclick = () => {
       ${THEMES.map(([k,l])=>`<option value="${k}"${s.theme===k?" selected":""}>${l}</option>`).join("")}</select></div>
     <div class="fRow"><label>Font</label><select id="sFont">
       ${FONTS.map(([k,l])=>`<option value="${k}"${s.font===k?" selected":""}>${l}</option>`).join("")}</select></div>
-    <div class="fRow"><label>Work day start / end</label>
-      <div style="display:flex;gap:8px"><input id="sStart" type="time" value="${s.dayStart}"><input id="sEnd" type="time" value="${s.dayEnd}"></div></div>
+    <div class="fRow"><label>Work hours</label>
+      <div style="display:flex;gap:8px">
+        <input id="sStart" type="time" value="${s.dayStart}"><input id="sEnd" type="time" value="${s.dayEnd}">
+      </div>
+      <span class="small muted">Used for "Auto"-slotting tasks and the day's default range.</span></div>
+    <div class="fRow"><label>Calendar display range</label>
+      <div style="display:flex;gap:8px">
+        <input id="sViewStart" type="time" value="${s.viewStart||""}"><input id="sViewEnd" type="time" value="${s.viewEnd||""}">
+      </div>
+      <span class="small muted">What the Today timeline actually shows - leave blank to match work hours. Widen this to see/drag tasks into early mornings or evenings without changing what "Auto" treats as normal hours.</span></div>
+    <div class="fRow"><label>Lunch break (optional)</label>
+      <div style="display:flex;gap:8px">
+        <input id="sLunchStart" type="time" value="${s.lunchStart||""}"><input id="sLunchEnd" type="time" value="${s.lunchEnd||""}">
+      </div>
+      <span class="small muted">"Auto" will skip over this window. Leave both blank for no lunch block.</span></div>
     <div class="fRow"><label>Round export durations to (minutes)</label><input id="sRound" type="number" min="1" value="${s.rounding||5}"></div>
     <div class="fRow"><label>Slotted-task reminders</label>
       <div style="display:flex;gap:10px;align-items:center">
@@ -962,6 +1050,12 @@ $("#settingsBtn").onclick = () => {
         <input id="sLead" type="number" min="0" max="120" value="${s.remindLead||0}" style="width:70px">
         <span class="small muted">min before slot time</span>
       </div></div>
+    <div class="fRow"><label>Browser notifications</label>
+      <div style="display:flex;gap:10px;align-items:center">
+        <label class="small"><input type="checkbox" id="sBrowserNotif"${s.browserNotifications?" checked":""}> enabled</label>
+        <span class="small muted" id="notifPermNote"></span>
+      </div>
+      <span class="small muted">Also fires a system notification when a reminder is due - useful if the tab isn't in front. Needs your browser's permission.</span></div>
     <div class="fRow"><label>Task categories</label><div id="sCats"></div>
       <button id="sCatAdd" class="ghost small" type="button">+ Add category</button></div>
     <div class="fRow"><label>Interrupt quick-timers (one per line)</label><textarea id="sInt" rows="4">${esc((s.interrupts||[]).join("\n"))}</textarea></div>
@@ -969,6 +1063,61 @@ $("#settingsBtn").onclick = () => {
     <div class="mActions"><button id="mCancel">Cancel</button><button class="primary" id="mSave">Save</button></div>`);
   $("#sTheme").onchange = e => document.body.dataset.theme = e.target.value;
   $("#sFont").onchange = e => document.body.dataset.font = e.target.value;
+  // --- backup: export downloads a JSON snapshot; import replaces everything ---
+  $("#sExport").onclick = async () => {
+    const r = await fetch("/api/export");
+    if(!r.ok){ alert("Export failed."); return; }
+    const data = await r.json();
+    const stamp = new Date().toISOString().slice(0,10);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], {type:"application/json"}));
+    a.download = `timepilot-export-${data.username}-${stamp}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+  };
+  $("#sImportFile").onchange = async e => {
+    const file = e.target.files[0]; if(!file) return;
+    const status = $("#sImportStatus");
+    const fail = msg => { status.textContent = msg; status.classList.add("errText"); e.target.value = ""; };
+    status.classList.remove("errText");
+    let parsed;
+    try { parsed = JSON.parse(await file.text()); }
+    catch(err){
+      const head = new Uint8Array(await file.slice(0,2).arrayBuffer());
+      if(head[0]===0x50 && head[1]===0x4B){ fail("That's a .zip file - this expects the JSON file downloaded by \"Export data\"."); return; }
+      fail("Not a valid JSON file."); return;
+    }
+    if(parsed.app !== "timepilot"){ fail("Not a TimePilot export file."); return; }
+    const counts = Object.entries(parsed.state||{})
+      .filter(([k,v])=>Array.isArray(v)).map(([k,v])=>`${v.length} ${k}`).join(", ");
+    if(!confirm(`Import this file? This REPLACES everything currently in your account (${counts}) and cannot be undone.`)){
+      e.target.value = ""; return;
+    }
+    status.textContent = "Importing...";
+    const r = await fetch("/api/import", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(parsed)});
+    const j = await r.json();
+    if(!r.ok){ fail(j.error || "Import failed."); return; }
+    status.textContent = "Restored ✓ reloading...";
+    setTimeout(() => location.reload(), 700);   // simplest correct way to resync every view with the replaced data
+  };
+  // --- browser notifications: reflect + request permission on toggle ---
+  const notifSupported = "Notification" in window;
+  const notifBox = $("#sBrowserNotif"), notifNote = $("#notifPermNote");
+  const renderNotifNote = () => {
+    if(!notifSupported){ notifNote.textContent = "not supported in this browser"; notifBox.disabled = true; notifBox.checked = false; return; }
+    if(Notification.permission === "denied") notifNote.textContent = "blocked - allow notifications for this site in your browser settings";
+    else if(Notification.permission === "granted") notifNote.textContent = "permission granted";
+    else notifNote.textContent = "will ask for permission when enabled";
+  };
+  renderNotifNote();
+  notifBox.onchange = async () => {
+    if(!notifBox.checked) return;               // turning off never needs permission
+    if(!notifSupported){ notifBox.checked = false; return; }
+    if(Notification.permission === "granted"){ renderNotifNote(); return; }
+    const perm = await Notification.requestPermission();
+    if(perm !== "granted") notifBox.checked = false;
+    renderNotifNote();
+  };
   // --- category manager (works on a copy; applied on Save) ---
   const catsWork = getCats().map(c=>({...c}));
   function drawCats(){
@@ -990,22 +1139,34 @@ $("#settingsBtn").onclick = () => {
   $("#sCatAdd").onclick = () => { catsWork.push({k:"c_"+uid(), label:"New category", color:"#57b76a"}); drawCats(); };
   $("#sIcsFile").onchange = async e => {
     const file = e.target.files[0]; if(!file) return;
-    const r = await fetch("/api/calendar/upload", {method:"POST", body: await file.text()});
+    const { token } = await (await fetch("/api/csrf-token")).json();
+    const r = await fetch("/api/calendar/upload", {method:"POST", headers:{"X-CSRFToken":token}, body: await file.text()});
     const j = await r.json();
     $("#sIcsStatus").textContent = j.ok ? `Uploaded ✓ (${Math.round(j.size/1024)} KB)` : (j.error || "Upload failed");
     calCache = {};
   };
-  $("#mSave").onclick = () => {
+  $("#mSave").onclick = async () => {
+    const lunchStart = $("#sLunchStart").value, lunchEnd = $("#sLunchEnd").value;
+    if(lunchStart && lunchEnd && hmToMin(lunchEnd) <= hmToMin(lunchStart)){
+      alert("Lunch end time must be after lunch start time."); return;
+    }
     Object.assign(s, { icsUrl:$("#sIcs").value.trim(), theme:$("#sTheme").value, font:$("#sFont").value,
       dayStart:$("#sStart").value, dayEnd:$("#sEnd").value, rounding:+$("#sRound").value||5,
+      viewStart:$("#sViewStart").value, viewEnd:$("#sViewEnd").value,
+      lunchStart, lunchEnd,
       remind:$("#sRemind").checked, remindLead:+$("#sLead").value||0,
+      browserNotifications:$("#sBrowserNotif").checked,
       interrupts:$("#sInt").value.split("\n").map(x=>x.trim()).filter(Boolean),
       ignoreEvents:$("#sIgnore").value.split("\n").map(x=>x.trim()).filter(Boolean),
       categories: catsWork });
     const valid = new Set(catsWork.map(c=>c.k));
     S.tasks.forEach(t=>{ if(!valid.has(t.category)) t.category = defCat(); });
     S.timelog.forEach(e=>{ if(e.category && e.category!=="meeting" && !valid.has(e.category)) e.category = defCat(); });
-    calCache = {}; markDirty(); applySettings(); closeModal(); renderStrip();
+    calCache = {}; markDirty();
+    await persist();   // wait for the actual write to land - Settings Save is a deliberate action, not
+                        // something that should still be sitting in the 600ms auto-save debounce when
+                        // the modal closes and the user immediately checks Today/Export against the server
+    applySettings(); closeModal(); renderStrip();
     if(view==="board") renderBoard();
     if(view==="today") renderToday(); if(view==="export") renderExport();
   };
@@ -1031,40 +1192,6 @@ function setView(v){
 }
 function renderAll(){ renderStrip(); setView(view); }
 
-/* ================= pywebview window controls (desktop widget) ================= */
-function initWinCtrls(){
-  const api = window.pywebview && window.pywebview.api;
-  if(!api || !api.begin) return;
-  $("#winCtrls").style.display = "";
-  $("#resizeGrip").style.display = "";
-  $("#wMin").onclick = () => api.minimize();
-  $("#wClose").onclick = () => api.close();
-  const bindDrag = (el, fn) => {
-    el.addEventListener("pointerdown", e => {
-      if(e.button !== 0) return;
-      e.preventDefault();
-      el.setPointerCapture(e.pointerId);
-      const sx = e.screenX, sy = e.screenY;
-      api.begin();
-      let queued = false, dx = 0, dy = 0;
-      const mv = ev => { dx = ev.screenX - sx; dy = ev.screenY - sy;
-        if(!queued){ queued = true;
-          requestAnimationFrame(()=>{ queued = false; fn(dx, dy); }); } };
-      const up = () => { el.removeEventListener("pointermove", mv);
-        el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); };
-      el.addEventListener("pointermove", mv);
-      el.addEventListener("pointerup", up);
-      el.addEventListener("pointercancel", up);
-    });
-  };
-  const handle = $("#dragHandle");
-  handle.classList.add("draggable"); handle.title = "Drag to move window";
-  bindDrag(handle, (dx,dy)=>api.drag(dx,dy));
-  bindDrag($("#resizeGrip"), (dx,dy)=>api.size(dx,dy));
-}
-window.addEventListener("pywebviewready", initWinCtrls);
-if(window.pywebview) initWinCtrls();
-
 /* ================= slotted-task reminders ================= */
 function checkReminders(){
   if(!S || S.settings.remind === false) return;
@@ -1085,8 +1212,20 @@ function checkReminders(){
   });
   if(!due) return;
   due.reminded = today+" "+due.slot; markDirty();
-  try{ if(window.pywebview?.api?.restore) window.pywebview.api.restore(); }catch(e){}
+  fireBrowserNotification(due);
   reminderModal(due);
+}
+function fireBrowserNotification(t){
+  if(!S.settings.browserNotifications) return;
+  if(!("Notification" in window) || Notification.permission !== "granted") return;
+  try{
+    const n = new Notification("⏰ Task due: "+t.title, {
+      body: `Slotted for ${t.slot} · ${catName(t.category)} · ${t.est||30}m`,
+      icon: "/static/favicon.png",
+      tag: "timepilot-reminder-"+t.id,   // replaces any earlier notification for the same task rather than stacking
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch(e){ /* some browsers reject construction outside a user gesture in edge cases - the modal still shows either way */ }
 }
 function reminderModal(t){
   openModal(`<h3>⏰ Task due: ${esc(t.title)}</h3>
@@ -1115,10 +1254,24 @@ setInterval(checkReminders, 20000);
 let _rzT;
 window.addEventListener("resize", () => {
   clearTimeout(_rzT);
-  _rzT = setTimeout(()=>{ if(view==="today") renderToday(); }, 150);
+  _rzT = setTimeout(()=>{
+    // A resize can fire just from a mobile on-screen keyboard opening (typing
+    // into a time/text field changes the visual viewport height) - re-rendering
+    // in that moment would wipe out whatever the user is mid-typing, since
+    // unslotted-task inputs aren't tied to app state until "Slot" is clicked.
+    const ae = document.activeElement;
+    if(ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
+    if(view==="today") renderToday();
+  }, 150);
 });
 
 window.addEventListener("beforeunload", () => { if(dirty) persistBeacon(); });
+$("#logoutBtn").onclick = async () => {
+  if(dirty) await persist();  // don't lose in-flight edits
+  const { token } = await (await fetch("/api/csrf-token")).json();
+  await fetch("/logout", { method: "POST", headers: { "X-CSRFToken": token } });
+  location.href = "/login";
+};
 loadState();
 </script>
 </body>
