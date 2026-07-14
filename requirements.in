@@ -14,4 +14,4 @@ recurring-ical-events>=3.8.2
 tzdata>=2026.2
 cryptography>=46.0.7    # CVE-2026-39892 fixed in 46.0.7 - do not go below this
 gunicorn>=26.0.0
-werkzeug>=3.1.5          # CVE-2026-21860 fixed in 3.1.5 - do not go below this
+werkzeug>=3.1.8          # CVE-2026-21860 fixed in 3.1.5 - do not go below this
