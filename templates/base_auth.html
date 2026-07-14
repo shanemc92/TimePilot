@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}TimePilot{% endblock %}</title>
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+<style>
+:root{--bg:#121417;--surface:#1b1e23;--surface2:#23272e;--line:#2e333b;
+  --text:#e7e9ec;--muted:#8b93a1;--accent:#e8a33d;--danger:#e05d44;}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:32px;width:100%;max-width:360px}
+.brand{display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:18px}
+.brand img{width:56px;height:56px;margin-bottom:10px}
+.brand h1{font-size:18px;margin:0}
+.sub{color:var(--muted);font-size:13px;margin-bottom:22px;text-align:center}
+.fRow{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+label{font-size:12px;color:var(--muted)}
+input[type=text],input[type=password]{background:var(--surface2);border:1px solid var(--line);color:var(--text);
+  border-radius:7px;padding:9px 10px;font-size:14px;font-family:inherit}
+input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.errors{color:var(--danger);font-size:12px;margin-top:3px}
+.flash{background:color-mix(in srgb, var(--danger) 15%, transparent);border:1px solid var(--danger);
+  color:var(--text);border-radius:7px;padding:8px 10px;font-size:13px;margin-bottom:14px}
+button{width:100%;background:var(--accent);color:#121417;border:none;border-radius:7px;padding:10px;
+  font-size:14px;font-weight:600;cursor:pointer;margin-top:6px}
+button:hover{opacity:.92}
+.switch{text-align:center;margin-top:18px;font-size:13px;color:var(--muted)}
+.switch a{color:var(--accent);text-decoration:none}
+.switch a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">
+    <img src="{{ url_for('static', filename='logo.svg') }}" alt="TimePilot">
+    <h1>TimePilot</h1>
+  </div>
+  <div class="sub">{% block subtitle %}{% endblock %}</div>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</div>
+</body>
+</html>
