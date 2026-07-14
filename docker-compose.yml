@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-timepilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set - copy .env.example to .env and fill it in}
+      POSTGRES_DB: ${POSTGRES_DB:-timepilot}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-timepilot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # no ports:, not on any external network - only `timepilot` can reach
+    # this, and only over the internal-only network below
+
+  timepilot:
+    # Published image - docker compose pull && up -d uses this directly.
+    # Still overridable: docker compose up --build uses the Dockerfile
+    # below instead and locally tags the result with this same name.
+    image: ghcr.io/shanemc92/timepilot:latest
+    build: .
+    restart: unless-stopped
+    # Caps a runaway worker / memory leak before it can exhaust the host.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-timepilot}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-timepilot}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:?FLASK_SECRET_KEY is not set - see .env.example}
+      TIMEPILOT_MASTER_KEY: ${TIMEPILOT_MASTER_KEY:?TIMEPILOT_MASTER_KEY is not set - see .env.example}
+      SESSION_COOKIE_SECURE: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5170/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - internal
+    ports:
+      # Bound to localhost only - safe as a default (nothing world-reachable
+      # without a proxy in front), and it's the standard "reverse proxy on
+      # the same host" pattern: point Traefik, Nginx, Caddy, whatever you use
+      # at 127.0.0.1:5170. Running the proxy on a different host, or want it
+      # reachable directly? Change or remove this line to suit.
+      - "127.0.0.1:5170:5170"
+
+networks:
+  internal:
+    internal: true   # no route to the outside world - postgres stays unreachable except via the app
+
+volumes:
+  postgres_data:
