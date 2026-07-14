@@ -86,7 +86,7 @@ python-dateutil==2.9.0.post0
     #   recurring-ical-events
 recurring-ical-events==3.8.2
     # via -r requirements.in
-requests==2.33.1
+requests==2.34.2
     # via -r requirements.in
 six==1.17.0
     # via python-dateutil
