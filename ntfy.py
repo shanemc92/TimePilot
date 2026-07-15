@@ -99,8 +99,16 @@ def send(settings, message, title="TimePilot", tags="alarm_clock", priority=3):
 def _header_safe(v):
     """HTTP headers are latin-1 and single-line. ntfy reads Title/Tags from
     headers, so anything with a newline (or an emoji in a task name) would
-    otherwise raise inside requests and lose the notification entirely."""
-    return str(v).replace("\n", " ").replace("\r", " ").encode("ascii", "replace").decode("ascii")[:250]
+    otherwise raise inside requests and lose the notification entirely.
+
+    'ignore' drops non-ASCII chars outright - 'replace' (the previous
+    behaviour) substitutes each one with a literal '?', which is why a
+    leading emoji like the "⏰" in "⏰ Task due: ..." showed up as "? Task
+    due: ..." in the notification title. ntfy also renders the Tags header
+    as its own emoji, so the title didn't need one anyway.
+    """
+    v = str(v).replace("\n", " ").replace("\r", " ").encode("ascii", "ignore").decode("ascii")
+    return " ".join(v.split())[:250]   # collapse the double space the dropped emoji leaves behind
 
 
 def advance_time(ts, interval_type, interval_value):
