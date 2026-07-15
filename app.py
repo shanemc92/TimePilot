@@ -70,6 +70,9 @@ DEFAULT_SETTINGS = {
     "ntfyTopic": "",
     "ntfyIcon": "",
     "ntfyTasks": False,
+    "quickTags": ["alarm_clock", "mailbox_with_mail", "warning", "rotating_light",
+                  "calendar", "computer", "bulb", "white_check_mark",
+                  "closed_lock_with_key", "wastebasket"],
     "interrupts": ["Message", "Email", "Call", "Meeting"],
     "ignoreEvents": ["Private Appointment"],
     "categories": [

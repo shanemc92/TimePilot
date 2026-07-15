@@ -178,6 +178,35 @@ main{padding:14px;max-width:1400px;margin:0 auto}
 .warnBox{background:color-mix(in srgb, var(--danger) 12%, transparent);border:1px solid var(--danger);
   border-radius:7px;padding:8px 10px;color:var(--text)}
 
+/* tag input: emoji preview swatch + text field */
+.tagInputRow{display:flex;gap:8px;align-items:center}
+.tagPreview{flex:none;width:38px;height:38px;display:flex;align-items:center;justify-content:center;
+  font-size:19px;background:var(--surface2);border:1px solid var(--line);border-radius:8px}
+.tagInputRow input{flex:1}
+.quickTagRow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.quickTagRow button{flex:none;width:34px;height:34px;padding:0;font-size:17px;line-height:1;
+  border:1px solid var(--line);background:var(--surface2);border-radius:8px;cursor:pointer;transition:.15s}
+.quickTagRow button:hover{border-color:var(--accent);transform:translateY(-1px)}
+.quickTagRow button.on{border-color:var(--accent);background:color-mix(in srgb, var(--accent) 14%, transparent)}
+.quickTagRow .qtEmpty{font-size:12px;color:var(--muted);align-self:center}
+
+/* recurrence toggle card, styled after the standalone ntfy scheduler this replaces */
+.toggleRow{display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--surface2);
+  border:1px solid var(--line);border-radius:8px;cursor:pointer;transition:border-color .15s;user-select:none}
+.toggleRow:hover,.toggleRow.on{border-color:var(--accent)}
+.toggleRow.on{background:color-mix(in srgb, var(--accent) 8%, var(--surface2))}
+.toggleSwitch{position:relative;width:38px;height:21px;flex:none}
+.toggleSwitch input{opacity:0;width:0;height:0;position:absolute}
+.toggleSlider{position:absolute;inset:0;background:var(--line);border-radius:21px;transition:.15s;pointer-events:none}
+.toggleSlider::before{content:"";position:absolute;width:15px;height:15px;left:3px;top:3px;
+  background:var(--surface);border-radius:50%;transition:.15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.toggleSwitch input:checked + .toggleSlider{background:var(--accent)}
+.toggleSwitch input:checked + .toggleSlider::before{transform:translateX(17px)}
+.recurOpts{display:none;margin-top:8px;padding:12px 14px;background:var(--surface2);
+  border:1px solid var(--line);border-radius:8px}
+.recurOpts.on{display:block}
+.recurInputs{display:grid;grid-template-columns:76px 1fr;gap:10px;margin-top:8px}
+
 /* ---- settings accordion ---- */
 #modalBox.settings{width:min(560px,100%);display:flex;flex-direction:column;max-height:90vh;padding:0}
 #modalBox.settings > h3{padding:18px 18px 12px;margin:0;flex:none}
@@ -337,22 +366,32 @@ pre#exportText{background:var(--surface2);border:1px solid var(--line);border-ra
           <input id="remPrio" type="range" min="1" max="5" step="1" value="3" style="width:100%">
           <div style="display:flex;justify-content:space-between" class="small muted">
             <span>Min</span><span>Low</span><span>Default</span><span>High</span><span>Urgent</span></div></div>
-        <div class="fRow"><label>Tag (ntfy emoji shortcode)</label>
-          <input id="remTag" maxlength="60" placeholder="alarm_clock" list="tagList">
+        <div class="fRow"><label>Tag</label>
+          <div class="tagInputRow">
+            <span id="remTagPreview" class="tagPreview">🔔</span>
+            <input id="remTag" maxlength="60" placeholder="Paste an emoji, or type a shortcode" list="tagList">
+          </div>
+          <div id="remTagWarn" class="small errText" style="display:none"></div>
+          <div class="quickTagRow" id="quickTagRow"></div>
           <datalist id="tagList">
             <option value="alarm_clock"><option value="mailbox_with_mail"><option value="warning">
             <option value="rotating_light"><option value="calendar"><option value="computer">
             <option value="bulb"><option value="white_check_mark">
           </datalist></div>
         <div class="fRow"><label>Repeat</label>
-          <label class="small"><input type="checkbox" id="remRecur"> recurring</label>
-          <div id="remRecurOpts" style="display:none;gap:8px;margin-top:6px">
-            <span class="small muted">every</span>
-            <input id="remIntVal" type="number" min="1" value="1" style="width:70px">
-            <select id="remIntType">
-              <option value="hours">Hours</option><option value="days" selected>Days</option>
-              <option value="weeks">Weeks</option><option value="months">Months</option>
-            </select></div></div>
+          <label class="toggleRow" id="remRecurRow">
+            <span class="toggleSwitch"><input type="checkbox" id="remRecur"><span class="toggleSlider"></span></span>
+            <span>Repeat this reminder</span>
+          </label>
+          <div id="remRecurOpts" class="recurOpts">
+            <span class="small muted">Repeat every</span>
+            <div class="recurInputs">
+              <input id="remIntVal" type="number" min="1" max="999" value="1">
+              <select id="remIntType">
+                <option value="hours">Hours</option><option value="days" selected>Days</option>
+                <option value="weeks">Weeks</option><option value="months">Months</option>
+              </select>
+            </div></div></div>
         <div class="mActions" style="justify-content:flex-start">
           <button class="primary" id="remSave">Schedule</button>
           <button class="ghost" id="remReset" style="display:none">Cancel edit</button>
@@ -1164,9 +1203,69 @@ $("#bulkCsv").onclick = () => {
 /* ================= notifications (ntfy reminders) ================= */
 let reminders = [], remEditing = null;
 
-const NTFY_TAG_EMOJI = { alarm_clock:"⏰", mailbox_with_mail:"📬", warning:"⚠️", rotating_light:"🚨",
-  calendar:"📅", computer:"💻", bulb:"💡", white_check_mark:"✅" };
+// gemoji-standard [emoji, shortcode] pairs - the same short-code set ntfy,
+// GitHub and Slack use. Curated to common/likely-useful ones rather than the
+// full ~1900-entry gemoji table; an emoji missing here still works fine as a
+// *typed* shortcode; it just won't auto-convert from a pasted glyph.
+const EMOJI_TAG_PAIRS = [
+  ["⏰","alarm_clock"],["📬","mailbox_with_mail"],["⚠️","warning"],["🚨","rotating_light"],
+  ["📅","calendar"],["🗓️","spiral_calendar"],["💻","computer"],["💡","bulb"],["✅","white_check_mark"],
+  ["🔔","bell"],["🔕","no_bell"],["📣","mega"],["📢","loudspeaker"],
+  ["🐈","cat2"],["🐱","cat"],["🐕","dog2"],["🐶","dog"],["🐰","rabbit"],["🐦","bird"],["🐟","fish"],
+  ["😀","grinning"],["😃","smiley"],["😄","smile"],["😊","blush"],["🙂","slightly_smiling_face"],
+  ["😉","wink"],["😅","sweat_smile"],["😂","joy"],["🤣","rofl"],["😍","heart_eyes"],["😘","kissing_heart"],
+  ["😎","sunglasses"],["🤔","thinking"],["😴","sleeping"],["😢","cry"],["😭","sob"],["😡","rage"],
+  ["😱","scream"],["🥳","partying_face"],
+  ["🔐","closed_lock_with_key"],["🔒","lock"],["🔓","unlock"],["🔑","key"],
+  ["🗑️","wastebasket"],["🍃","leaves"],["🌿","herb"],["🌱","seedling"],["🌳","deciduous_tree"],
+  ["🔥","fire"],["💧","droplet"],["⭐","star"],["🌟","star2"],["✨","sparkles"],["🎉","tada"],
+  ["🎁","gift"],["❤️","heart"],["💙","blue_heart"],["💚","green_heart"],["💛","yellow_heart"],
+  ["💜","purple_heart"],["👍","thumbsup"],["👎","thumbsdown"],["👏","clap"],["🙏","pray"],["💪","muscle"],
+  ["🤝","handshake"],["👋","wave"],["✌️","v"],["🤞","crossed_fingers"],
+  ["📌","pushpin"],["📍","round_pushpin"],["📎","paperclip"],["📝","memo"],["📄","page_facing_up"],
+  ["📁","file_folder"],["📊","bar_chart"],["📈","chart_with_upwards_trend"],["📉","chart_with_downwards_trend"],
+  ["💰","moneybag"],["💵","dollar"],["💳","credit_card"],["🏦","bank"],["🛒","shopping_cart"],
+  ["🚗","car"],["🚕","taxi"],["🚌","bus"],["🚲","bike"],["✈️","airplane"],["🚀","rocket"],
+  ["🏠","house"],["🏢","office"],["🏥","hospital"],["🏫","school"],
+  ["☕","coffee"],["🍵","tea"],["🍕","pizza"],["🍎","apple"],["💊","pill"],["🩺","stethoscope"],
+  ["☀️","sunny"],["🌧️","rain_cloud"],["🌈","rainbow"],["❄️","snowflake"],
+  ["🎂","birthday"],["🏆","trophy"],["📚","books"],["📖","book"],["✏️","pencil2"],
+  ["⏳","hourglass_flowing_sand"],["⏱️","stopwatch"],["🚧","construction"],["🔧","wrench"],["🔨","hammer"],
+  ["🖥️","desktop_computer"],["📱","iphone"],["☎️","telephone"],["✉️","envelope"],
+  ["🔍","mag"],["🧭","compass"],["🌍","earth_africa"],
+];
+const EMOJI_TO_TAG = Object.fromEntries(EMOJI_TAG_PAIRS.map(([e,t])=>[e,t]));
+const NTFY_TAG_EMOJI = Object.fromEntries(EMOJI_TAG_PAIRS.map(([e,t])=>[t,e]));
+const DEFAULT_QUICK_TAGS = ["alarm_clock","mailbox_with_mail","warning","rotating_light",
+  "calendar","computer","bulb","white_check_mark","closed_lock_with_key","wastebasket"];
+
+// Splits on grapheme clusters (not UTF-16 code units), so a ZWJ sequence or
+// skin-tone-modified emoji is treated as the single glyph it visually is.
+// Falls back to Array.from (code-point-aware, but not ZWJ-aware) on browsers
+// without Intl.Segmenter - a minor degradation, not a crash.
+function graphemesOf(str){
+  if(window.Intl && Intl.Segmenter){
+    return [...new Intl.Segmenter(undefined, {granularity:"grapheme"}).segment(str)].map(s=>s.segment);
+  }
+  return Array.from(str);
+}
+const EMOJI_RE = /\p{Extended_Pictographic}/u;
+// U+FE0F (variation selector-16) is optional on many emoji - strip it before
+// lookup so "🗑️" (with VS16) and "🗑" (without) both resolve.
+const emojiToTag = g => EMOJI_TO_TAG[g] || EMOJI_TO_TAG[g.replace(/\uFE0F/g,"")] || null;
+// Up to 10 shortcodes, deduped, in the order they were parsed.
+function parseQuickTagsInput(str){
+  const out = [];
+  for(const g of graphemesOf(str||"")){
+    if(!EMOJI_RE.test(g)) continue;
+    const tag = emojiToTag(g);
+    if(tag && !out.includes(tag)) out.push(tag);
+    if(out.length >= 10) break;
+  }
+  return out;
+}
 const PRIO_LABEL = {1:"Min",2:"Low",3:"Default",4:"High",5:"Urgent"};
+
 
 async function loadReminders(){
   try { reminders = await (await fetch("/api/reminders")).json(); }
@@ -1174,18 +1273,24 @@ async function loadReminders(){
 }
 function ntfyConfigured(){ return !!(S.settings.ntfyTopic||"").trim(); }
 
+function setTagPreview(tag){
+  $("#remTagPreview").textContent = NTFY_TAG_EMOJI[tag] || "🔔";
+  document.querySelectorAll("#quickTagRow button").forEach(b=>b.classList.toggle("on", b.dataset.tag===tag));
+}
 function remFormReset(){
   remEditing = null;
   $("#remFormTitle").textContent = "New reminder";
   $("#remSave").textContent = "Schedule";
   $("#remReset").style.display = "none";
   $("#remMsg").value = ""; $("#remPrio").value = 3; $("#remPrioVal").textContent = "3";
-  $("#remTag").value = ""; $("#remRecur").checked = false; $("#remRecurOpts").style.display = "none";
+  $("#remTag").value = ""; $("#remTagWarn").style.display = "none"; setTagPreview("");
+  $("#remRecur").checked = false; $("#remRecurOpts").classList.remove("on"); $("#remRecurRow").classList.remove("on");
   $("#remIntVal").value = 1; $("#remIntType").value = "days";
   const d = new Date(Date.now() + 60*60*1000);
   $("#remDate").value = isoOf(d);
   $("#remTime").value = String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
   document.querySelectorAll("#remList .remItem").forEach(e=>e.classList.remove("editing"));
+  renderQuickTagRow();
 }
 function remLoadInto(r){
   remEditing = r.id;
@@ -1194,12 +1299,12 @@ function remLoadInto(r){
   $("#remReset").style.display = "";
   $("#remMsg").value = r.message;
   $("#remPrio").value = r.priority; $("#remPrioVal").textContent = r.priority;
-  $("#remTag").value = r.tag || "";
+  $("#remTag").value = r.tag || ""; $("#remTagWarn").style.display = "none"; setTagPreview(r.tag||"");
   const d = new Date(r.next_fire*1000);
   $("#remDate").value = isoOf(d);
   $("#remTime").value = String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
   $("#remRecur").checked = !!r.recurring;
-  $("#remRecurOpts").style.display = r.recurring ? "flex" : "none";
+  $("#remRecurOpts").classList.toggle("on", !!r.recurring); $("#remRecurRow").classList.toggle("on", !!r.recurring);
   if(r.recurring){ $("#remIntVal").value = r.interval_value||1; $("#remIntType").value = r.interval_type||"days"; }
   renderRemList();
   $("#view-notif").scrollIntoView({behavior:"smooth", block:"start"});
@@ -1216,6 +1321,7 @@ function fmtInterval(type, val){
   return `every ${val} ${(map[type]||type)+(val>1?"s":"")}`;
 }
 function renderNotif(){
+  renderQuickTagRow();
   const warn = $("#remWarn");
   if(!ntfyConfigured()){
     warn.style.display = ""; warn.className = "small warnBox";
@@ -1260,8 +1366,47 @@ function remStatus(msg, isErr){
   if(msg) setTimeout(()=>{ if(el.textContent===msg) el.textContent=""; }, 4000);
 }
 $("#remPrio").oninput = e => $("#remPrioVal").textContent = e.target.value;
-$("#remRecur").onchange = e => $("#remRecurOpts").style.display = e.target.checked ? "flex" : "none";
+$("#remRecur").onchange = e => {
+  $("#remRecurOpts").classList.toggle("on", e.target.checked);
+  $("#remRecurRow").classList.toggle("on", e.target.checked);
+};
 $("#remReset").onclick = () => { remFormReset(); renderRemList(); };
+
+// Paste/type a single emoji -> auto-converts to its ntfy shortcode. If more
+// than one emoji is pasted, only the first is kept (graphemesOf().find below).
+// An emoji outside EMOJI_TO_TAG is rejected with a hint rather than silently
+// sent - a raw glyph in the Tags header would just vanish (ntfy tags are
+// ASCII shortcodes, not literal emoji).
+$("#remTag").addEventListener("input", e => {
+  const raw = e.target.value;
+  if(!raw){ $("#remTagWarn").style.display = "none"; setTagPreview(""); return; }
+  if(EMOJI_RE.test(raw)){
+    const g = graphemesOf(raw).find(x => EMOJI_RE.test(x));
+    const tag = g && emojiToTag(g);
+    if(tag){
+      e.target.value = tag; $("#remTagWarn").style.display = "none"; setTagPreview(tag);
+    } else {
+      e.target.value = "";
+      $("#remTagWarn").textContent = "Emoji not recognized - try typing a shortcode (e.g. alarm_clock), or pick one below.";
+      $("#remTagWarn").style.display = "";
+      setTagPreview("");
+    }
+    return;
+  }
+  $("#remTagWarn").style.display = "none";
+  setTagPreview(raw.trim());
+});
+function renderQuickTagRow(){
+  const tags = (S.settings.quickTags && S.settings.quickTags.length) ? S.settings.quickTags : DEFAULT_QUICK_TAGS;
+  const box = $("#quickTagRow"); box.innerHTML = "";
+  if(!tags.length){ box.innerHTML = `<span class="qtEmpty">No quick tags set - add some in Settings.</span>`; return; }
+  tags.forEach(t=>{
+    const b = document.createElement("button"); b.type = "button"; b.dataset.tag = t;
+    b.title = t; b.textContent = NTFY_TAG_EMOJI[t] || "🔔";
+    b.onclick = () => { $("#remTag").value = t; $("#remTagWarn").style.display = "none"; setTagPreview(t); };
+    box.appendChild(b);
+  });
+}
 document.querySelectorAll("#view-notif [data-quick]").forEach(b=>{
   b.onclick = () => {
     const d = new Date(Date.now() + (+b.dataset.quick)*60000);
@@ -1361,6 +1506,11 @@ $("#settingsBtn").onclick = () => {
       <div class="fRow"><label>Push task &amp; meeting reminders to ntfy</label>
         <label class="small"><input type="checkbox" id="sNtfyTasks"${s.ntfyTasks?" checked":""}> enabled</label>
         <span class="small muted">Sends an ntfy push alongside each pop-up reminder above. Needs a tab open - scheduled reminders on the <strong>Notifications</strong> tab are sent by the server and don't.</span></div>
+      <div class="fRow"><label>Quick-pick tags (up to 10)</label>
+        <input id="sQuickTags" value="${(s.quickTags&&s.quickTags.length?s.quickTags:DEFAULT_QUICK_TAGS).map(t=>NTFY_TAG_EMOJI[t]||"").join("")}"
+          placeholder="Paste up to 10 emoji, e.g. ⏰📬🚨📅💻🔐🗑️🍃😊✅">
+        <div class="quickTagRow" id="sQuickPreview"></div>
+        <span class="small muted">Shown as quick buttons on the Notifications tab's Tag field. Unrecognized emoji are skipped.</span></div>
       <div class="fRow">
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button id="sNtfyTest" type="button">Send test notification</button>
@@ -1408,6 +1558,16 @@ $("#settingsBtn").onclick = () => {
       else { st.textContent = j.error || "Send failed"; st.className = "small errText"; }
     } catch(e){ st.textContent = "Send failed"; st.className = "small errText"; }
   };
+  // --- quick-pick tags: live preview of which pasted emoji were recognized ---
+  const drawQuickPreview = () => {
+    const tags = parseQuickTagsInput($("#sQuickTags").value);
+    const box = $("#sQuickPreview");
+    box.innerHTML = tags.length
+      ? tags.map(t=>`<button type="button" disabled title="${t}">${NTFY_TAG_EMOJI[t]}</button>`).join("")
+      : `<span class="qtEmpty">No emoji recognized yet.</span>`;
+  };
+  $("#sQuickTags").addEventListener("input", drawQuickPreview);
+  drawQuickPreview();
   // --- backup: export downloads a JSON snapshot; import replaces everything ---
   $("#sExport").onclick = async () => {
     const r = await fetch("/api/export");
@@ -1504,6 +1664,7 @@ $("#settingsBtn").onclick = () => {
       browserNotifications:$("#sBrowserNotif").checked,
       ntfyUrl:$("#sNtfyUrl").value.trim(), ntfyTopic:$("#sNtfyTopic").value.trim(),
       ntfyIcon:$("#sNtfyIcon").value.trim(), ntfyTasks:$("#sNtfyTasks").checked,
+      quickTags: parseQuickTagsInput($("#sQuickTags").value),
       interrupts:$("#sInt").value.split("\n").map(x=>x.trim()).filter(Boolean),
       ignoreEvents:$("#sIgnore").value.split("\n").map(x=>x.trim()).filter(Boolean),
       categories: catsWork });
