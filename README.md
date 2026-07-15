@@ -25,9 +25,13 @@ at rest in PostgreSQL.
   category, or start time.
 - **Timesheet export** - editable per-day entries that aggregate into a
   clean text list, plus a date-range bulk export to CSV.
-- **Notes, Snippets & Clipboard** - free-form note sections, a searchable
-  code-snippet library, and a Markdown-aware clipboard library for reusable
-  text/templates.
+- **Notes, Snippets & Clipboard** - free-form note sections (reorderable,
+  click a note to copy it), a searchable code-snippet library, and a
+  Markdown-aware clipboard library for reusable text/templates.
+- **Notifications (ntfy)** - schedule one-off or recurring push reminders to
+  your phone via [ntfy](https://ntfy.sh) (ntfy.sh or your own server). Sent
+  by the server, so they arrive whether or not the app is open. Task and
+  meeting pop-ups can optionally push to ntfy too.
 - **Encrypted at rest** - every user's data is AES-256-GCM encrypted before
   it touches the database (see "Security notes" below).
 - **Backup/restore** - export your account's data as a single JSON file
@@ -153,6 +157,43 @@ timeline actually shows - widen this to see or manually place out-of-hours
 items without changing what counts as normal hours), and an optional lunch
 break that "Auto" slotting skips over.
 
+## Notifications (optional)
+
+TimePilot can push reminders to your phone via [ntfy](https://ntfy.sh).
+Configure it in **⚙ Settings → Notifications & ntfy**:
+
+1. **Server URL** - `https://ntfy.sh`, or your own self-hosted server.
+2. **Topic** - any name you like, e.g. `timepilot-a7f3c2e9`. Subscribe to the
+   same topic in the ntfy mobile/desktop app. **Anyone who knows a topic name
+   can read and post to it on a public server**, so use something long and
+   unguessable rather than `reminders`.
+3. **Icon URL** (optional) - a `.png` shown on the notification.
+4. **Send test notification** confirms it works before you save.
+
+There are two separate kinds of reminder, and the difference matters:
+
+| | Where | Delivered when app is closed? |
+|---|---|---|
+| **Scheduled reminders** | Notifications tab | **Yes** - sent by the server |
+| **Task / meeting pop-ups** | fired by Settings → Reminders | No - needs a tab open |
+
+The **Notifications** tab schedules one-off or recurring reminders (hours /
+days / weeks / months) with an ntfy priority and emoji tag. A background
+thread in the app dispatches them every 30 seconds, so they arrive with
+nothing open - it replaces the cron job you'd otherwise wire up. Recurring
+reminders that were missed while the app was down roll forward to their next
+occurrence rather than firing once per occurrence missed.
+
+The **"Push task & meeting reminders to ntfy"** toggle mirrors the existing
+slotted-task and meeting pop-ups out to ntfy as they fire. Those are driven
+by the browser, so they only happen while a tab is open somewhere - if you
+want a reminder that reaches you regardless, schedule it on the Notifications
+tab.
+
+**Self-hosted ntfy on a private address?** See `TIMEPILOT_ALLOW_PRIVATE_NTFY`
+in `.env.example` - private targets are opt-in, for the reason described
+under "Security notes" below.
+
 ## Security notes
 
 **Encryption at rest.** Every user's tasks, notes, snippets, settings, and
@@ -176,6 +217,14 @@ at your internal network and use the app as a probe. The check runs both
 up front (for a friendly error message) and again at connection time on
 every request and redirect hop, which also narrows the DNS-rebinding
 window to milliseconds.
+
+**ntfy server URL.** Same reasoning as the calendar fetch: the server posts
+to whatever ntfy URL a user configures, so by default it refuses private,
+loopback, or internal addresses. Self-hosted ntfy servers usually *are* on
+such an address, so this is the one place that guard can be relaxed - set
+`TIMEPILOT_ALLOW_PRIVATE_NTFY=true` in `.env`. That's deliberately an
+operator decision made once in the environment, rather than something any
+registered user can switch on from Settings.
 
 **Response headers.** Every response carries `Content-Security-Policy`
 (self-only sources, no framing, no plugins), `X-Frame-Options: DENY`,
@@ -213,8 +262,8 @@ Built your own image instead (option 2 above)? Pull the latest source,
 
 **Per-account export/import.** Logged in, Settings → Backup → Export data
 downloads a JSON file with everything in that account - tasks, notes,
-snippets, clipboard items, and settings. Import restores from a
-previously exported file, **replacing** everything currently in the
+snippets, clipboard items, scheduled reminders, and settings. Import restores
+from a previously exported file, **replacing** everything currently in the
 account (a confirmation step shows what's about to be replaced before it
 happens). This is the fastest way to back up or move a single account's
 data, and doesn't need shell access to the server.

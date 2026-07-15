@@ -139,11 +139,59 @@ main{padding:14px;max-width:1400px;margin:0 auto}
 .slotItem input[type=time]{width:96px}
 
 /* ---- notes ---- */
-#notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--gap);align-items:start}
+/* Columns cap at 4 (matching .libGrid): each track is at least 280px, but
+   also at least a quarter of the row, so a 5th can never fit - independent
+   of viewport or main's max-width. align-items defaults to stretch so every
+   panel in a row matches the tallest one; the panel is a flex column so its
+   note list absorbs the slack and "Add note..." stays pinned at the bottom. */
+#notes{display:grid;grid-template-columns:repeat(auto-fill,minmax(max(280px,(100% - 3*var(--gap))/4),1fr));gap:var(--gap)}
+#notes .panel{display:flex;flex-direction:column;min-width:0}
+#notes .items{flex:1 1 auto}
+#notes .addRow{margin-top:8px}
 .noteItem{display:flex;gap:6px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line)}
 .noteItem:last-child{border-bottom:none}
-.noteItem .tx{flex:1;font-size:13px;white-space:pre-wrap}
-.noteItem .tx[contenteditable]:focus{outline:1px solid var(--accent);border-radius:4px;padding:2px}
+/* overflow-wrap:anywhere breaks unspaced strings (long URLs) mid-token rather
+   than letting them push the panel wide; min-width:0 lets the flex child
+   actually shrink below its content width, without which the break never
+   engages. */
+.noteItem .tx{flex:1;min-width:0;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;cursor:pointer;border-radius:4px;padding:2px}
+.noteItem .tx:hover{background:var(--surface2)}
+.noteItem .tx.flash{outline:2px solid var(--ok)}
+.noteItem button{flex:none}
+#notes h3 .secBtns{display:flex;gap:4px;margin-left:auto}
+#notes h3 .secBtns button{padding:3px 7px;font-size:11px}
+
+/* ---- notifications ---- */
+#view-notif{--accent:#e0913a}
+[data-theme="light"] #view-notif{--accent:#b06a17}
+#notifWrap{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:var(--gap);align-items:start}
+@media(max-width:820px){#notifWrap{grid-template-columns:1fr}}
+.remItem{display:flex;gap:8px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line)}
+.remItem:last-child{border-bottom:none}
+.remItem .rMain{flex:1;min-width:0}
+.remItem .rMsg{font-size:13px;overflow-wrap:anywhere;margin-bottom:3px}
+.remItem .rMeta{display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+.remItem.editing{outline:1px solid var(--accent);border-radius:6px;padding:9px 6px}
+.remItem .rActs{display:flex;gap:4px;flex:none}
+.remItem .rActs button{padding:3px 7px;font-size:11px}
+.rDue{color:var(--danger);font-weight:600}
+.warnBox{background:color-mix(in srgb, var(--danger) 12%, transparent);border:1px solid var(--danger);
+  border-radius:7px;padding:8px 10px;color:var(--text)}
+
+/* ---- settings accordion ---- */
+#modalBox.settings{width:min(560px,100%);display:flex;flex-direction:column;max-height:90vh;padding:0}
+#modalBox.settings > h3{padding:18px 18px 12px;margin:0;flex:none}
+#setBody{overflow:auto;padding:0 18px;flex:1 1 auto}
+#modalBox.settings .mActions{flex:none;padding:12px 18px;border-top:1px solid var(--line);
+  background:var(--surface);border-radius:0 0 12px 12px;margin:0}
+.setSec{border:1px solid var(--line);border-radius:8px;margin-bottom:8px;overflow:hidden}
+.setSec > summary{padding:9px 12px;cursor:pointer;font-size:13px;font-weight:600;background:var(--surface2);
+  list-style:none;display:flex;align-items:center;gap:8px}
+.setSec > summary::-webkit-details-marker{display:none}
+.setSec > summary::before{content:"▸";color:var(--muted);font-size:11px}
+.setSec[open] > summary::before{content:"▾"}
+.setSec .setSecBody{padding:12px 12px 4px}
+.setSec .fRow:last-child{margin-bottom:8px}
 
 /* ---- export ---- */
 #exportWrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--gap)}
@@ -175,7 +223,9 @@ pre#exportText{background:var(--surface2);border:1px solid var(--line);border-ra
 /* ---- snippets / clipboard libraries ---- */
 #view-snips{--accent:#bd93f9}
 [data-theme="light"] #view-snips{--accent:#8b5fd0}
-.libGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--gap);align-items:start}
+/* Same 4-column cap formula as #notes - previously this only ever showed 4
+   because main's max-width happened to stop a 5th fitting; now it's explicit. */
+.libGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(max(280px,(100% - 3*var(--gap))/4),1fr));gap:var(--gap);align-items:start}
 .libCard .hd{margin-bottom:2px}
 .libCard .hd strong{font-size:14px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .libCard .hd2{display:flex;gap:5px;align-items:center;flex-wrap:nowrap;margin-bottom:4px;min-height:26px}
@@ -227,6 +277,7 @@ pre#exportText{background:var(--surface2);border:1px solid var(--line);border-ra
   <button class="tab" data-view="notes">Notes</button>
   <button class="tab" data-view="snips">Snippets</button>
   <button class="tab" data-view="paste">Clipboard</button>
+  <button class="tab" data-view="notif">Notifications</button>
   <button class="tab" data-view="export">Export</button>
   <span class="spacer"></span>
   <button id="settingsBtn" class="ghost">⚙ Settings</button>
@@ -264,6 +315,55 @@ pre#exportText{background:var(--surface2);border:1px solid var(--line);border-ra
 
   <section id="view-snips" style="display:none"></section>
   <section id="view-paste" style="display:none"></section>
+
+  <section id="view-notif" style="display:none">
+    <div id="notifWrap">
+      <div class="panel">
+        <h3 id="remFormTitle">New reminder</h3>
+        <div id="remWarn" class="small" style="display:none;margin-bottom:10px"></div>
+        <div class="fRow"><label>Message</label>
+          <textarea id="remMsg" rows="3" maxlength="500" placeholder="What should the notification say?"></textarea></div>
+        <div class="fRow"><label>When</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="remDate" type="date"><input id="remTime" type="time">
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+            <button class="ghost small" data-quick="30">+30m</button>
+            <button class="ghost small" data-quick="60">+1h</button>
+            <button class="ghost small" data-quick="180">+3h</button>
+            <button class="ghost small" data-quick="1440">Tomorrow</button>
+          </div></div>
+        <div class="fRow"><label>Priority: <span id="remPrioVal">3</span></label>
+          <input id="remPrio" type="range" min="1" max="5" step="1" value="3" style="width:100%">
+          <div style="display:flex;justify-content:space-between" class="small muted">
+            <span>Min</span><span>Low</span><span>Default</span><span>High</span><span>Urgent</span></div></div>
+        <div class="fRow"><label>Tag (ntfy emoji shortcode)</label>
+          <input id="remTag" maxlength="60" placeholder="alarm_clock" list="tagList">
+          <datalist id="tagList">
+            <option value="alarm_clock"><option value="mailbox_with_mail"><option value="warning">
+            <option value="rotating_light"><option value="calendar"><option value="computer">
+            <option value="bulb"><option value="white_check_mark">
+          </datalist></div>
+        <div class="fRow"><label>Repeat</label>
+          <label class="small"><input type="checkbox" id="remRecur"> recurring</label>
+          <div id="remRecurOpts" style="display:none;gap:8px;margin-top:6px">
+            <span class="small muted">every</span>
+            <input id="remIntVal" type="number" min="1" value="1" style="width:70px">
+            <select id="remIntType">
+              <option value="hours">Hours</option><option value="days" selected>Days</option>
+              <option value="weeks">Weeks</option><option value="months">Months</option>
+            </select></div></div>
+        <div class="mActions" style="justify-content:flex-start">
+          <button class="primary" id="remSave">Schedule</button>
+          <button class="ghost" id="remReset" style="display:none">Cancel edit</button>
+          <span class="small" id="remStatus"></span></div>
+      </div>
+      <div class="panel">
+        <h3>Scheduled <span id="remCount" class="muted"></span></h3>
+        <div id="remList"></div>
+      </div>
+    </div>
+  </section>
 
   <section id="view-export" style="display:none">
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
@@ -364,6 +464,10 @@ function persistBeacon(){
 /* ================= helpers ================= */
 const pad = n => String(n).padStart(2,"0");
 const hmNow = () => { const d=new Date(); return pad(d.getHours())+":"+pad(d.getMinutes()); };
+// Local-date YYYY-MM-DD. Deliberately not todayISO()'s toISOString(), which
+// is UTC - that shifts the date near midnight and would put a reminder's
+// date picker on the wrong day.
+const isoOf = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 const hmToMin = hm => { const [h,m]=hm.split(":").map(Number); return h*60+m; };
 const minToHM = m => pad(Math.floor(m/60))+":"+pad(m%60);
 const fmtDur = m => { m=Math.max(0,Math.round(m)); const h=Math.floor(m/60); return (h? h+"h ":"")+(m%60)+"m"; };
@@ -711,24 +815,74 @@ async function renderToday(force){
 $("#calRefresh").onclick = () => renderToday(true);
 
 /* ================= notes ================= */
+function moveNoteSection(id, dir){
+  const i = S.notes.findIndex(x=>x.id===id), j = i + dir;
+  if(i<0 || j<0 || j>=S.notes.length) return;
+  [S.notes[i], S.notes[j]] = [S.notes[j], S.notes[i]];
+  markDirty(); renderNotes();
+}
+async function copyNote(el, text){
+  try { await navigator.clipboard.writeText(text); }
+  catch(err){ return; }
+  el.classList.add("flash");
+  setTimeout(()=>el.classList.remove("flash"), 900);
+}
+function noteSectionModal(sec){
+  openModal(`<h3>Edit section</h3>
+    <div class="fRow"><label>Title</label><input id="mTitle" maxlength="60" value="${esc(sec.title)}"></div>
+    <div class="mActions"><button class="danger" id="mDel">Delete</button>
+      <button id="mCancel">Cancel</button><button class="primary" id="mSave">Save</button></div>`);
+  $("#mTitle").focus();
+  $("#mSave").onclick = () => {
+    const v = $("#mTitle").value.trim(); if(!v) return;
+    sec.title = v; markDirty(); closeModal(); renderNotes();
+  };
+  $("#mDel").onclick = () => {
+    if(sec.items.length && !confirm(`Delete section “${sec.title}” and its ${sec.items.length} note(s)?`)) return;
+    S.notes = S.notes.filter(x=>x.id!==sec.id); markDirty(); closeModal(); renderNotes();
+  };
+  $("#mCancel").onclick = closeModal;
+}
+function noteItemModal(sec, it){
+  openModal(`<h3>Edit note</h3>
+    <div class="fRow"><label>Text</label><textarea id="mText" rows="5" spellcheck="false">${esc(it.text)}</textarea></div>
+    <div class="mActions"><button class="danger" id="mDel">Delete</button>
+      <button id="mCancel">Cancel</button><button class="primary" id="mSave">Save</button></div>`);
+  $("#mText").focus();
+  $("#mSave").onclick = () => {
+    const v = $("#mText").value.trim(); if(!v) return;
+    it.text = v; markDirty(); closeModal(); renderNotes();
+  };
+  $("#mDel").onclick = () => {
+    sec.items = sec.items.filter(x=>x.id!==it.id); markDirty(); closeModal(); renderNotes();
+  };
+  $("#mCancel").onclick = closeModal;
+}
 function renderNotes(){
   const wrap = $("#notes"); wrap.innerHTML = "";
-  S.notes.forEach(sec=>{
+  S.notes.forEach((sec,si)=>{
     const p = document.createElement("div"); p.className = "panel";
     p.innerHTML = `<h3 style="display:flex;align-items:center;gap:8px"><span>${esc(sec.title)}</span>
-      <button class="ghost small" style="margin-left:auto" title="Delete section">✕</button></h3>
+      <span class="secBtns">
+        <button data-up class="ghost small" title="Move left"${si===0?" disabled":""}>&#9664;</button>
+        <button data-down class="ghost small" title="Move right"${si===S.notes.length-1?" disabled":""}>&#9654;</button>
+        <button data-edit class="ghost small" title="Edit section">&#9998;</button>
+      </span></h3>
       <div class="items"></div>
       <div class="addRow"><input placeholder="Add note..."><button>+</button></div>`;
-    p.querySelector("h3 button").onclick = () => {
-      if(sec.items.length && !confirm(`Delete section “${sec.title}” and its notes?`)) return;
-      S.notes = S.notes.filter(x=>x.id!==sec.id); markDirty(); renderNotes();
-    };
+    p.querySelector("[data-up]").onclick = () => moveNoteSection(sec.id, -1);
+    p.querySelector("[data-down]").onclick = () => moveNoteSection(sec.id, 1);
+    p.querySelector("[data-edit]").onclick = () => noteSectionModal(sec);
     const items = p.querySelector(".items");
     sec.items.forEach(it=>{
       const row = document.createElement("div"); row.className="noteItem";
-      row.innerHTML = `<div class="tx" contenteditable="true">${esc(it.text)}</div><button class="ghost small">✕</button>`;
-      row.querySelector(".tx").onblur = e => { it.text = e.target.innerText.trim(); markDirty(); };
-      row.querySelector("button").onclick = () => { sec.items = sec.items.filter(x=>x.id!==it.id); markDirty(); renderNotes(); };
+      row.innerHTML = `<div class="tx" title="Click to copy">${esc(it.text)}</div>
+        <button class="ghost small" title="Edit note">&#9998;</button>`;
+      row.querySelector(".tx").onclick = e => {
+        if(e.target.closest("a")) return;
+        copyNote(e.currentTarget, it.text);
+      };
+      row.querySelector("button").onclick = () => noteItemModal(sec, it);
       items.appendChild(row);
     });
     const inp = p.querySelector(".addRow input");
@@ -1007,62 +1161,253 @@ $("#bulkCsv").onclick = () => {
   setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
 };
 
+/* ================= notifications (ntfy reminders) ================= */
+let reminders = [], remEditing = null;
+
+const NTFY_TAG_EMOJI = { alarm_clock:"⏰", mailbox_with_mail:"📬", warning:"⚠️", rotating_light:"🚨",
+  calendar:"📅", computer:"💻", bulb:"💡", white_check_mark:"✅" };
+const PRIO_LABEL = {1:"Min",2:"Low",3:"Default",4:"High",5:"Urgent"};
+
+async function loadReminders(){
+  try { reminders = await (await fetch("/api/reminders")).json(); }
+  catch(e){ reminders = []; }
+}
+function ntfyConfigured(){ return !!(S.settings.ntfyTopic||"").trim(); }
+
+function remFormReset(){
+  remEditing = null;
+  $("#remFormTitle").textContent = "New reminder";
+  $("#remSave").textContent = "Schedule";
+  $("#remReset").style.display = "none";
+  $("#remMsg").value = ""; $("#remPrio").value = 3; $("#remPrioVal").textContent = "3";
+  $("#remTag").value = ""; $("#remRecur").checked = false; $("#remRecurOpts").style.display = "none";
+  $("#remIntVal").value = 1; $("#remIntType").value = "days";
+  const d = new Date(Date.now() + 60*60*1000);
+  $("#remDate").value = isoOf(d);
+  $("#remTime").value = String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+  document.querySelectorAll("#remList .remItem").forEach(e=>e.classList.remove("editing"));
+}
+function remLoadInto(r){
+  remEditing = r.id;
+  $("#remFormTitle").textContent = "Edit reminder";
+  $("#remSave").textContent = "Save changes";
+  $("#remReset").style.display = "";
+  $("#remMsg").value = r.message;
+  $("#remPrio").value = r.priority; $("#remPrioVal").textContent = r.priority;
+  $("#remTag").value = r.tag || "";
+  const d = new Date(r.next_fire*1000);
+  $("#remDate").value = isoOf(d);
+  $("#remTime").value = String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+  $("#remRecur").checked = !!r.recurring;
+  $("#remRecurOpts").style.display = r.recurring ? "flex" : "none";
+  if(r.recurring){ $("#remIntVal").value = r.interval_value||1; $("#remIntType").value = r.interval_type||"days"; }
+  renderRemList();
+  $("#view-notif").scrollIntoView({behavior:"smooth", block:"start"});
+}
+function fmtWhen(ts){
+  const d = new Date(ts*1000), now = new Date();
+  const time = String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+  if(isoOf(d) === isoOf(now)) return "Today "+time;
+  if(isoOf(d) === isoOf(new Date(now.getTime()+86400000))) return "Tomorrow "+time;
+  return d.toLocaleDateString(undefined,{day:"numeric",month:"short"})+" "+time;
+}
+function fmtInterval(type, val){
+  const map = {hours:"hr", days:"day", weeks:"wk", months:"mo"};
+  return `every ${val} ${(map[type]||type)+(val>1?"s":"")}`;
+}
+function renderNotif(){
+  const warn = $("#remWarn");
+  if(!ntfyConfigured()){
+    warn.style.display = ""; warn.className = "small warnBox";
+    warn.innerHTML = `No ntfy topic configured - reminders won't be delivered. Set one in <strong>⚙ Settings → Notifications &amp; ntfy</strong>.`;
+  } else warn.style.display = "none";
+  renderRemList();
+}
+function renderRemList(){
+  const box = $("#remList"), now = Date.now()/1000;
+  box.innerHTML = "";
+  $("#remCount").textContent = reminders.length ? `(${reminders.length})` : "";
+  if(!reminders.length){
+    box.innerHTML = `<span class="muted small">Nothing scheduled yet.</span>`; return;
+  }
+  [...reminders].sort((a,b)=>a.next_fire-b.next_fire).forEach(r=>{
+    const row = document.createElement("div");
+    row.className = "remItem" + (remEditing===r.id ? " editing" : "");
+    const emoji = NTFY_TAG_EMOJI[r.tag] || "🔔";
+    row.innerHTML = `<div class="rMain">
+        <div class="rMsg">${emoji} ${esc(r.message)}</div>
+        <div class="rMeta">
+          <span class="${r.next_fire<=now?"rDue":""}">${esc(fmtWhen(r.next_fire))}</span>
+          <span>P${r.priority} ${esc(PRIO_LABEL[r.priority]||"")}</span>
+          ${r.recurring?`<span>🔁 ${esc(fmtInterval(r.interval_type, r.interval_value))}</span>`:"<span>one-off</span>"}
+        </div></div>
+      <div class="rActs"><button data-edit class="ghost small" title="Edit">&#9998;</button>
+        <button data-del class="ghost small danger" title="Delete">✕</button></div>`;
+    row.querySelector("[data-edit]").onclick = () => remLoadInto(r);
+    row.querySelector("[data-del]").onclick = async () => {
+      if(!confirm("Delete this reminder?")) return;
+      const resp = await fetch("/api/reminders/"+r.id, {method:"DELETE"});
+      if(!resp.ok){ remStatus("Delete failed", true); return; }
+      if(remEditing===r.id) remFormReset();
+      await loadReminders(); renderRemList();
+    };
+    box.appendChild(row);
+  });
+}
+function remStatus(msg, isErr){
+  const el = $("#remStatus");
+  el.textContent = msg; el.className = "small " + (isErr ? "errText" : "muted");
+  if(msg) setTimeout(()=>{ if(el.textContent===msg) el.textContent=""; }, 4000);
+}
+$("#remPrio").oninput = e => $("#remPrioVal").textContent = e.target.value;
+$("#remRecur").onchange = e => $("#remRecurOpts").style.display = e.target.checked ? "flex" : "none";
+$("#remReset").onclick = () => { remFormReset(); renderRemList(); };
+document.querySelectorAll("#view-notif [data-quick]").forEach(b=>{
+  b.onclick = () => {
+    const d = new Date(Date.now() + (+b.dataset.quick)*60000);
+    if(b.dataset.quick === "1440"){ d.setHours(9,0,0,0); }
+    $("#remDate").value = isoOf(d);
+    $("#remTime").value = String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+  };
+});
+$("#remSave").onclick = async () => {
+  const msg = $("#remMsg").value.trim();
+  if(!msg){ remStatus("Message is required", true); return; }
+  if(!$("#remDate").value || !$("#remTime").value){ remStatus("Pick a date and time", true); return; }
+  const when = new Date(`${$("#remDate").value}T${$("#remTime").value}`);
+  if(isNaN(when)){ remStatus("Invalid date/time", true); return; }
+  const recurring = $("#remRecur").checked;
+  // A past time on a recurring reminder is fine (the dispatcher rolls it
+  // forward to the next occurrence); on a one-off it would just fire instantly.
+  if(!recurring && when.getTime() < Date.now()-60000){ remStatus("That time is in the past", true); return; }
+  const payload = { message: msg, priority: +$("#remPrio").value,
+    tag: $("#remTag").value.trim() || "alarm_clock",
+    next_fire: Math.floor(when.getTime()/1000), recurring,
+    interval_type: recurring ? $("#remIntType").value : null,
+    interval_value: recurring ? +$("#remIntVal").value : null };
+  const url = remEditing ? "/api/reminders/"+remEditing : "/api/reminders";
+  const r = await fetch(url, {method: remEditing?"PUT":"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)});
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok){ remStatus(j.error || "Save failed", true); return; }
+  remStatus(remEditing ? "Saved ✓" : "Scheduled ✓");
+  remFormReset(); await loadReminders(); renderNotif();
+};
+
+/* Mirrors a pop-up reminder to ntfy. Fire-and-forget: a failed push must
+   never block or break the pop-up itself, which is the primary reminder. */
+async function pushNtfy(message, title, tag, priority){
+  if(!S.settings.ntfyTasks || !ntfyConfigured()) return;
+  try {
+    await fetch("/api/ntfy/send", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({message, title, tag, priority: priority||3})});
+  } catch(e){ /* offline or server down - the pop-up already showed */ }
+}
+
 /* ================= settings modal ================= */
 $("#settingsBtn").onclick = () => {
   const s = S.settings;
-  openModal(`<h3>Settings</h3>
-    <div class="fRow"><label>Backup</label>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button id="sExport" type="button">⬇ Export data</button>
-        <label class="ghost small" style="padding:5px 10px;border:1px solid var(--line);border-radius:7px;cursor:pointer">
-          ⬆ Import data<input type="file" id="sImportFile" accept=".json,application/json" style="display:none">
-        </label>
-        <span class="small muted" id="sImportStatus"></span>
-      </div>
-      <span class="small muted">Export downloads a JSON file with all your tasks, notes, snippets, clipboard items, and settings. Import <strong>replaces</strong> everything currently in your account with the contents of a previously exported file.</span></div>
-    <div class="fRow"><label>Exchange published calendar ICS URL</label><input id="sIcs" value="${esc(s.icsUrl||"")}" placeholder="https://outlook.office365.com/owa/calendar/.../calendar.ics"></div>
-    <div class="fRow"><label>...or upload a .ics file (used as fallback if the URL is empty or unreachable)</label>
-      <input type="file" id="sIcsFile" accept=".ics,text/calendar">
-      <span class="small muted" id="sIcsStatus"></span></div>
-    <div class="fRow"><label>Theme</label><select id="sTheme">
-      ${THEMES.map(([k,l])=>`<option value="${k}"${s.theme===k?" selected":""}>${l}</option>`).join("")}</select></div>
-    <div class="fRow"><label>Font</label><select id="sFont">
-      ${FONTS.map(([k,l])=>`<option value="${k}"${s.font===k?" selected":""}>${l}</option>`).join("")}</select></div>
-    <div class="fRow"><label>Work hours</label>
-      <div style="display:flex;gap:8px">
-        <input id="sStart" type="time" value="${s.dayStart}"><input id="sEnd" type="time" value="${s.dayEnd}">
-      </div>
-      <span class="small muted">Used for "Auto"-slotting tasks and the day's default range.</span></div>
-    <div class="fRow"><label>Calendar display range</label>
-      <div style="display:flex;gap:8px">
-        <input id="sViewStart" type="time" value="${s.viewStart||""}"><input id="sViewEnd" type="time" value="${s.viewEnd||""}">
-      </div>
-      <span class="small muted">What the Today timeline actually shows - leave blank to match work hours. Widen this to see/drag tasks into early mornings or evenings without changing what "Auto" treats as normal hours.</span></div>
-    <div class="fRow"><label>Lunch break (optional)</label>
-      <div style="display:flex;gap:8px">
-        <input id="sLunchStart" type="time" value="${s.lunchStart||""}"><input id="sLunchEnd" type="time" value="${s.lunchEnd||""}">
-      </div>
-      <span class="small muted">"Auto" will skip over this window. Leave both blank for no lunch block.</span></div>
-    <div class="fRow"><label>Round export durations to (minutes)</label><input id="sRound" type="number" min="1" value="${s.rounding||5}"></div>
-    <div class="fRow"><label>Slotted-task reminders</label>
-      <div style="display:flex;gap:10px;align-items:center">
-        <label class="small"><input type="checkbox" id="sRemind"${s.remind!==false?" checked":""}> enabled</label>
-        <input id="sLead" type="number" min="0" max="120" value="${s.remindLead||0}" style="width:70px">
-        <span class="small muted">min before slot time</span>
-      </div></div>
-    <div class="fRow"><label>Browser notifications</label>
-      <div style="display:flex;gap:10px;align-items:center">
-        <label class="small"><input type="checkbox" id="sBrowserNotif"${s.browserNotifications?" checked":""}> enabled</label>
-        <span class="small muted" id="notifPermNote"></span>
-      </div>
-      <span class="small muted">Also fires a system notification when a reminder is due - useful if the tab isn't in front. Needs your browser's permission.</span></div>
-    <div class="fRow"><label>Task categories</label><div id="sCats"></div>
-      <button id="sCatAdd" class="ghost small" type="button">+ Add category</button></div>
-    <div class="fRow"><label>Interrupt quick-timers (one per line)</label><textarea id="sInt" rows="4">${esc((s.interrupts||[]).join("\n"))}</textarea></div>
-    <div class="fRow"><label>Ignore calendar events with these titles (one per line - not logged)</label><textarea id="sIgnore" rows="2">${esc((s.ignoreEvents||["Private Appointment"]).join("\n"))}</textarea></div>
+  const sec = (title, body, open) =>
+    `<details class="setSec"${open?" open":""}><summary>${title}</summary><div class="setSecBody">${body}</div></details>`;
+  openModal(`<h3>Settings</h3><div id="setBody">
+    ${sec("Appearance", `
+      <div class="fRow"><label>Theme</label><select id="sTheme">
+        ${THEMES.map(([k,l])=>`<option value="${k}"${s.theme===k?" selected":""}>${l}</option>`).join("")}</select></div>
+      <div class="fRow"><label>Font</label><select id="sFont">
+        ${FONTS.map(([k,l])=>`<option value="${k}"${s.font===k?" selected":""}>${l}</option>`).join("")}</select></div>`, true)}
+    ${sec("Hours &amp; day", `
+      <div class="fRow"><label>Work hours</label>
+        <div style="display:flex;gap:8px">
+          <input id="sStart" type="time" value="${s.dayStart}"><input id="sEnd" type="time" value="${s.dayEnd}">
+        </div>
+        <span class="small muted">Used for "Auto"-slotting tasks and the day's default range.</span></div>
+      <div class="fRow"><label>Calendar display range</label>
+        <div style="display:flex;gap:8px">
+          <input id="sViewStart" type="time" value="${s.viewStart||""}"><input id="sViewEnd" type="time" value="${s.viewEnd||""}">
+        </div>
+        <span class="small muted">What the Today timeline actually shows - leave blank to match work hours. Widen this to see/drag tasks into early mornings or evenings without changing what "Auto" treats as normal hours.</span></div>
+      <div class="fRow"><label>Lunch break (optional)</label>
+        <div style="display:flex;gap:8px">
+          <input id="sLunchStart" type="time" value="${s.lunchStart||""}"><input id="sLunchEnd" type="time" value="${s.lunchEnd||""}">
+        </div>
+        <span class="small muted">"Auto" will skip over this window. Leave both blank for no lunch block.</span></div>
+      <div class="fRow"><label>Round export durations to (minutes)</label><input id="sRound" type="number" min="1" value="${s.rounding||5}"></div>`)}
+    ${sec("Reminders", `
+      <div class="fRow"><label>Slotted-task reminders</label>
+        <div style="display:flex;gap:10px;align-items:center">
+          <label class="small"><input type="checkbox" id="sRemind"${s.remind!==false?" checked":""}> enabled</label>
+          <input id="sLead" type="number" min="0" max="120" value="${s.remindLead||0}" style="width:70px">
+          <span class="small muted">min before slot time</span>
+        </div></div>
+      <div class="fRow"><label>Calendar meeting reminders</label>
+        <label class="small"><input type="checkbox" id="sRemindMeetings"${s.remindMeetings?" checked":""}> enabled</label>
+        <span class="small muted">Also remind you before calendar meetings start, using the same lead time as above. Ignored-event titles are skipped.</span></div>
+      <div class="fRow"><label>Browser notifications</label>
+        <div style="display:flex;gap:10px;align-items:center">
+          <label class="small"><input type="checkbox" id="sBrowserNotif"${s.browserNotifications?" checked":""}> enabled</label>
+          <span class="small muted" id="notifPermNote"></span>
+        </div>
+        <span class="small muted">Also fires a system notification when a reminder is due - useful if the tab isn't in front. Needs your browser's permission.</span></div>`)}
+    ${sec("Notifications &amp; ntfy", `
+      <div class="fRow"><label>ntfy server URL</label>
+        <input id="sNtfyUrl" value="${esc(s.ntfyUrl||"https://ntfy.sh")}" placeholder="https://ntfy.sh">
+        <span class="small muted">Public ntfy.sh, or your own self-hosted server.</span></div>
+      <div class="fRow"><label>Topic</label>
+        <input id="sNtfyTopic" value="${esc(s.ntfyTopic||"")}" placeholder="my-timepilot-a7f3c2">
+        <span class="small muted">Anyone who knows a topic name can read and post to it - use something long and unguessable, and subscribe to it in the ntfy app.</span></div>
+      <div class="fRow"><label>Notification icon URL (optional)</label>
+        <input id="sNtfyIcon" value="${esc(s.ntfyIcon||"")}" placeholder="https://example.com/icon.png">
+        <span class="small muted">A .png URL shown as the notification's icon.</span></div>
+      <div class="fRow"><label>Push task &amp; meeting reminders to ntfy</label>
+        <label class="small"><input type="checkbox" id="sNtfyTasks"${s.ntfyTasks?" checked":""}> enabled</label>
+        <span class="small muted">Sends an ntfy push alongside each pop-up reminder above. Needs a tab open - scheduled reminders on the <strong>Notifications</strong> tab are sent by the server and don't.</span></div>
+      <div class="fRow">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button id="sNtfyTest" type="button">Send test notification</button>
+          <span class="small muted" id="sNtfyStatus"></span>
+        </div></div>`)}
+    ${sec("Categories &amp; timers", `
+      <div class="fRow"><label>Task categories</label><div id="sCats"></div>
+        <button id="sCatAdd" class="ghost small" type="button">+ Add category</button></div>
+      <div class="fRow"><label>Interrupt quick-timers (one per line)</label><textarea id="sInt" rows="4">${esc((s.interrupts||[]).join("\n"))}</textarea></div>`)}
+    ${sec("Calendar", `
+      <div class="fRow"><label>Exchange published calendar ICS URL</label><input id="sIcs" value="${esc(s.icsUrl||"")}" placeholder="https://outlook.office365.com/owa/calendar/.../calendar.ics"></div>
+      <div class="fRow"><label>...or upload a .ics file (used as fallback if the URL is empty or unreachable)</label>
+        <input type="file" id="sIcsFile" accept=".ics,text/calendar">
+        <span class="small muted" id="sIcsStatus"></span></div>
+      <div class="fRow"><label>Ignore calendar events with these titles (one per line - not logged)</label><textarea id="sIgnore" rows="2">${esc((s.ignoreEvents||["Private Appointment"]).join("\n"))}</textarea></div>`)}
+    ${sec("Backup", `
+      <div class="fRow"><label>Export / import</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button id="sExport" type="button">⬇ Export data</button>
+          <label class="ghost small" style="padding:5px 10px;border:1px solid var(--line);border-radius:7px;cursor:pointer">
+            ⬆ Import data<input type="file" id="sImportFile" accept=".json,application/json" style="display:none">
+          </label>
+          <span class="small muted" id="sImportStatus"></span>
+        </div>
+        <span class="small muted">Export downloads a JSON file with all your tasks, notes, snippets, clipboard items, reminders, and settings. Import <strong>replaces</strong> everything currently in your account with the contents of a previously exported file.</span></div>`)}
+    </div>
     <div class="mActions"><button id="mCancel">Cancel</button><button class="primary" id="mSave">Save</button></div>`);
+  $("#modalBox").classList.add("settings");
   $("#sTheme").onchange = e => document.body.dataset.theme = e.target.value;
   $("#sFont").onchange = e => document.body.dataset.font = e.target.value;
+  // --- ntfy test: posts the values currently in the form, so you can verify
+  // before committing them with Save ---
+  $("#sNtfyTest").onclick = async () => {
+    const st = $("#sNtfyStatus");
+    if(!$("#sNtfyTopic").value.trim()){ st.textContent = "Set a topic first"; st.className = "small errText"; return; }
+    st.textContent = "Sending..."; st.className = "small muted";
+    try {
+      const r = await fetch("/api/ntfy/send", {method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ message:"TimePilot test notification - if you can read this, it works.",
+          title:"TimePilot", tag:"white_check_mark",
+          ntfyUrl:$("#sNtfyUrl").value.trim(), ntfyTopic:$("#sNtfyTopic").value.trim(),
+          ntfyIcon:$("#sNtfyIcon").value.trim() })});
+      const j = await r.json().catch(()=>({}));
+      if(r.ok){ st.textContent = "Sent ✓ check your device"; st.className = "small muted"; }
+      else { st.textContent = j.error || "Send failed"; st.className = "small errText"; }
+    } catch(e){ st.textContent = "Send failed"; st.className = "small errText"; }
+  };
   // --- backup: export downloads a JSON snapshot; import replaces everything ---
   $("#sExport").onclick = async () => {
     const r = await fetch("/api/export");
@@ -1155,7 +1500,10 @@ $("#settingsBtn").onclick = () => {
       viewStart:$("#sViewStart").value, viewEnd:$("#sViewEnd").value,
       lunchStart, lunchEnd,
       remind:$("#sRemind").checked, remindLead:+$("#sLead").value||0,
+      remindMeetings:$("#sRemindMeetings").checked,
       browserNotifications:$("#sBrowserNotif").checked,
+      ntfyUrl:$("#sNtfyUrl").value.trim(), ntfyTopic:$("#sNtfyTopic").value.trim(),
+      ntfyIcon:$("#sNtfyIcon").value.trim(), ntfyTasks:$("#sNtfyTasks").checked,
       interrupts:$("#sInt").value.split("\n").map(x=>x.trim()).filter(Boolean),
       ignoreEvents:$("#sIgnore").value.split("\n").map(x=>x.trim()).filter(Boolean),
       categories: catsWork });
@@ -1169,11 +1517,12 @@ $("#settingsBtn").onclick = () => {
     applySettings(); closeModal(); renderStrip();
     if(view==="board") renderBoard();
     if(view==="today") renderToday(); if(view==="export") renderExport();
+    if(view==="notif") renderNotif();
   };
   $("#mCancel").onclick = () => { applySettings(); closeModal(); };
 };
 function openModal(html){ $("#modalBox").innerHTML = html; $("#modal").classList.add("open"); }
-function closeModal(){ $("#modal").classList.remove("open"); }
+function closeModal(){ $("#modal").classList.remove("open"); $("#modalBox").classList.remove("settings"); }
 $("#modal").onclick = e => { if(e.target.id==="modal") closeModal(); };
 
 /* ================= nav ================= */
@@ -1183,19 +1532,23 @@ document.querySelectorAll("nav .tab").forEach(b=>{
 function setView(v){
   view = v;
   document.querySelectorAll("nav .tab").forEach(b=>b.classList.toggle("on", b.dataset.view===v));
-  ["board","today","notes","snips","paste","export"].forEach(x=>$("#view-"+x).style.display = x===v? "":"none");
+  ["board","today","notes","snips","paste","notif","export"].forEach(x=>$("#view-"+x).style.display = x===v? "":"none");
   if(v==="board") renderBoard();
   if(v==="today") renderToday();
   if(v==="notes") renderNotes();
   if(v==="snips"||v==="paste") renderLib(v);
+  if(v==="notif"){ remFormReset(); loadReminders().then(renderNotif); }
   if(v==="export") renderExport();
 }
 function renderAll(){ renderStrip(); setView(view); }
 
 /* ================= slotted-task reminders ================= */
 function checkReminders(){
-  if(!S || S.settings.remind === false) return;
-  if($("#modal").classList.contains("open")) return;   // don't interrupt an open dialog; retries next tick
+  if(!S || $("#modal").classList.contains("open")) return;   // don't interrupt an open dialog; retries next tick
+  if(S.settings.remind !== false) checkTaskReminders();
+  if(S.settings.remindMeetings) checkMeetingReminders();
+}
+function checkTaskReminders(){
   const lead = +S.settings.remindLead || 0;
   const now = hmToMin(hmNow());
   const today = todayISO();
@@ -1212,17 +1565,71 @@ function checkReminders(){
   });
   if(!due) return;
   due.reminded = today+" "+due.slot; markDirty();
-  fireBrowserNotification(due);
+  const taskBody = `Slotted for ${due.slot} · ${catName(due.category)} · ${due.est||30}m`;
+  fireBrowserNotification("⏰ Task due: "+due.title, taskBody, "task-"+due.id);
+  pushNtfy(taskBody, "⏰ Task due: "+due.title, "alarm_clock", 4);
   reminderModal(due);
 }
-function fireBrowserNotification(t){
+
+// Meetings live in the calendar, not S.tasks, so "already reminded" can't be
+// stored on the task. It's kept in memory only: a page reload inside the same
+// short window may re-pop a meeting, which is a fair trade against writing
+// per-meeting flags into saved state on every tick.
+const metReminded = new Set();
+let metCalAt = 0;
+async function checkMeetingReminders(){
+  const today = todayISO();
+  // Can't rely on renderToday having run - you might sit on the Board tab all
+  // day. Fetch it here, refreshing every 10 min so meetings added after the
+  // first load still get a reminder. The server caches ICS for 5 min anyway,
+  // so this is cheap.
+  if(!calCache[today] || Date.now() - metCalAt > 600000){
+    metCalAt = Date.now();
+    try { await fetchCal(today, !!calCache[today]); } catch(e){ return; }
+  }
+  const cal = calCache[today];
+  if(!cal || !cal.events) return;
+  const lead = +S.settings.remindLead || 0;
+  const now = hmToMin(hmNow());
+  const GRACE = 10;
+  const ignore = (S.settings.ignoreEvents || ["Private Appointment"]).map(x=>x.toLowerCase().trim()).filter(Boolean);
+  const due = cal.events.find(ev => {
+    if(ev.allDay) return false;
+    const title = (ev.title||"").toLowerCase();
+    if(ignore.some(x => title.includes(x))) return false;
+    const at = new Date(ev.start);
+    if(isoOf(at) !== today) return false;
+    const atM = at.getHours()*60 + at.getMinutes();
+    if(metReminded.has(today+"|"+ev.title+"|"+ev.start)) return false;
+    return now >= atM - lead && now <= atM + GRACE;
+  });
+  if(!due) return;
+  if($("#modal").classList.contains("open")) return;   // re-check: we awaited above
+  metReminded.add(today+"|"+due.title+"|"+due.start);
+  const at = new Date(due.start);
+  const hm = pad(at.getHours())+":"+pad(at.getMinutes());
+  const body = `Starts at ${hm}${due.location?" · "+due.location:""}`;
+  fireBrowserNotification("📅 Meeting: "+due.title, body, "cal-"+due.start);
+  pushNtfy(body, "📅 Meeting: "+due.title, "calendar", 4);
+  meetingModal(due, hm);
+}
+function meetingModal(ev, hm){
+  openModal(`<h3>📅 Meeting: ${esc(ev.title)}</h3>
+    <p class="muted small" style="margin-bottom:14px">Starts at ${esc(hm)}${ev.location?" · "+esc(ev.location):""}</p>
+    <div class="mActions" style="justify-content:flex-start;flex-wrap:wrap">
+      <button class="primary" id="rStart">▶ Start timer</button>
+      <button class="ghost" id="rDismiss">Dismiss</button></div>`);
+  $("#rStart").onclick = () => { startTimer(ev.title, null, "meeting"); closeModal(); };
+  $("#rDismiss").onclick = closeModal;
+}
+function fireBrowserNotification(title, body, key){
   if(!S.settings.browserNotifications) return;
   if(!("Notification" in window) || Notification.permission !== "granted") return;
   try{
-    const n = new Notification("⏰ Task due: "+t.title, {
-      body: `Slotted for ${t.slot} · ${catName(t.category)} · ${t.est||30}m`,
+    const n = new Notification(title, {
+      body,
       icon: "/static/favicon.png",
-      tag: "timepilot-reminder-"+t.id,   // replaces any earlier notification for the same task rather than stacking
+      tag: "timepilot-reminder-"+key,   // replaces any earlier notification for the same item rather than stacking
     });
     n.onclick = () => { window.focus(); n.close(); };
   } catch(e){ /* some browsers reject construction outside a user gesture in edge cases - the modal still shows either way */ }

@@ -40,7 +40,10 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          # ghcr.io requires an all-lowercase image path - github.repository
+          # preserves the repo's actual casing (TimePilot), which GHCR
+          # rejects outright. images_tags below lowercases it explicitly.
+          images: ghcr.io/${{ github.repository_owner }}/timepilot
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}

@@ -10,10 +10,12 @@ import logging
 import os
 import socket
 import time
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 import requests
+import ntfy as ntfy_mod
 from flask import Flask, jsonify, request, send_from_directory
 from flask_login import login_required, current_user
 
@@ -44,6 +46,7 @@ JSON_DOMAINS = {
     "notes": ["notes"],
     "snippets": ["snippets"],
     "clipboard": ["pastes"],
+    "reminders": ["reminders"],
     "runtime": ["activeTimer", "calSeen"],
 }
 CALENDAR_DOMAIN = "calendar_ics"
@@ -61,7 +64,12 @@ DEFAULT_SETTINGS = {
     "rounding": 15,
     "remind": True,
     "remindLead": 5,
+    "remindMeetings": False,
     "browserNotifications": False,
+    "ntfyUrl": "https://ntfy.sh",
+    "ntfyTopic": "",
+    "ntfyIcon": "",
+    "ntfyTasks": False,
     "interrupts": ["Message", "Email", "Call", "Meeting"],
     "ignoreEvents": ["Private Appointment"],
     "categories": [
@@ -80,6 +88,7 @@ KEY_DEFAULTS = {
     ],
     "snippets": [],
     "pastes": [],
+    "reminders": [],
     "activeTimer": None,
     "calSeen": {},
 }
@@ -126,9 +135,26 @@ def load_state(user_id):
     return state
 
 
-def save_state(user_id, state):
+def save_state(user_id, state, skip_domains=()):
     for domain, keys in JSON_DOMAINS.items():
+        if domain in skip_domains:
+            continue
         set_domain_json(user_id, domain, {k: state.get(k) for k in keys})
+
+
+def load_reminders(user_id):
+    data = get_domain_json(user_id, "reminders") or {}
+    r = data.get("reminders")
+    return r if isinstance(r, list) else []
+
+
+def save_reminders(user_id, reminders):
+    set_domain_json(user_id, "reminders", {"reminders": reminders})
+
+
+def load_settings(user_id):
+    s = (get_domain_json(user_id, "settings") or {}).get("settings")
+    return s if isinstance(s, dict) else {}
 
 
 def get_user_ics_bytes(user_id):
@@ -225,7 +251,7 @@ _ics_session.mount("http://", _ValidatingHTTPAdapter())
 _ics_session.mount("https://", _ValidatingHTTPAdapter())
 STATE_SHAPE = {
     "settings": dict, "tasks": list, "timelog": list, "notes": list,
-    "snippets": list, "pastes": list, "calSeen": dict,
+    "snippets": list, "pastes": list, "reminders": list, "calSeen": dict,
 }
 
 
@@ -394,12 +420,155 @@ def create_app():
         clean = _clean_state(_json_body())
         if clean is None:
             return jsonify({"error": "Invalid state payload"}), 400
+        # The dispatcher owns the reminders domain - it advances next_fire and
+        # drops spent one-time reminders on its own schedule. Letting this
+        # whole-state autosave write it too would mean a tab that loaded
+        # before a reminder fired could resurrect it on the next keystroke.
+        # /api/reminders is the only write path for them.
+        clean.pop("reminders", None)
         cur = load_state(current_user.id)
         cur.update(clean)
-        save_state(current_user.id, cur)
+        save_state(current_user.id, cur, skip_domains=("reminders",))
         return jsonify({"ok": True})
 
     EXPORT_VERSION = 1
+
+    # ---- ntfy reminders -------------------------------------------------
+    # These get their own CRUD rather than riding on /api/state because the
+    # background dispatcher also writes this domain; a single owner per write
+    # path is what keeps the two from fighting. Same CSRF reasoning as
+    # /api/state (JSON-only bodies).
+    def _clean_reminder(d, existing=None):
+        """Validate/normalise one reminder. Returns (reminder, error)."""
+        base = dict(existing or {})
+        msg = (d.get("message") or base.get("message") or "").strip()
+        if not msg:
+            return None, "Message is required"
+        if len(msg) > 500:
+            return None, "Message is too long (max 500 characters)"
+        try:
+            next_fire = int(d.get("next_fire", base.get("next_fire")))
+        except (TypeError, ValueError):
+            return None, "next_fire must be a Unix timestamp"
+        try:
+            priority = int(d.get("priority", base.get("priority", 3)))
+        except (TypeError, ValueError):
+            return None, "priority must be a number"
+        if not 1 <= priority <= 5:
+            return None, "priority must be 1-5"
+        recurring = bool(d.get("recurring", base.get("recurring", False)))
+        itype = d.get("interval_type", base.get("interval_type"))
+        ivalue = d.get("interval_value", base.get("interval_value"))
+        if recurring:
+            if itype not in ("hours", "days", "weeks", "months"):
+                return None, "interval_type must be hours, days, weeks or months"
+            try:
+                ivalue = int(ivalue)
+            except (TypeError, ValueError):
+                return None, "interval_value must be a number"
+            if ivalue < 1:
+                return None, "interval_value must be at least 1"
+        else:
+            itype, ivalue = None, None
+        tag = (d.get("tag") or base.get("tag") or "alarm_clock").strip()[:60]
+        return {
+            "id": base.get("id") or uuid.uuid4().hex,
+            "message": msg,
+            "priority": priority,
+            "tag": tag,
+            "next_fire": next_fire,
+            "recurring": recurring,
+            "interval_type": itype,
+            "interval_value": ivalue,
+            "created": base.get("created") or int(time.time()),
+        }, None
+
+    @app.route("/api/reminders", methods=["GET"])
+    @login_required
+    @csrf.exempt
+    def get_reminders():
+        rs = sorted(load_reminders(current_user.id), key=lambda r: r.get("next_fire", 0))
+        resp = jsonify(rs)
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
+    @app.route("/api/reminders", methods=["POST"])
+    @login_required
+    @csrf.exempt
+    def add_reminder():
+        if not request.is_json:
+            return jsonify({"error": "Content-Type must be application/json"}), 415
+        rs = load_reminders(current_user.id)
+        if len(rs) >= 200:
+            return jsonify({"error": "Reminder limit reached (200)"}), 400
+        r, err = _clean_reminder(_json_body() or {})
+        if err:
+            return jsonify({"error": err}), 400
+        rs.append(r)
+        save_reminders(current_user.id, rs)
+        logger.info("user %s (%s) created reminder %s", current_user.id, current_user.username, r["id"])
+        return jsonify(r), 201
+
+    @app.route("/api/reminders/<rid>", methods=["PUT"])
+    @login_required
+    @csrf.exempt
+    def update_reminder(rid):
+        if not request.is_json:
+            return jsonify({"error": "Content-Type must be application/json"}), 415
+        rs = load_reminders(current_user.id)
+        for i, existing in enumerate(rs):
+            if existing.get("id") == rid:
+                r, err = _clean_reminder(_json_body() or {}, existing)
+                if err:
+                    return jsonify({"error": err}), 400
+                rs[i] = r
+                save_reminders(current_user.id, rs)
+                return jsonify(r)
+        return jsonify({"error": "Not found"}), 404
+
+    @app.route("/api/reminders/<rid>", methods=["DELETE"])
+    @login_required
+    @csrf.exempt
+    def delete_reminder(rid):
+        rs = load_reminders(current_user.id)
+        kept = [r for r in rs if r.get("id") != rid]
+        if len(kept) == len(rs):
+            return jsonify({"error": "Not found"}), 404
+        save_reminders(current_user.id, kept)
+        return jsonify({"ok": True})
+
+    @app.route("/api/ntfy/send", methods=["POST"])
+    @login_required
+    @csrf.exempt
+    @limiter.limit("30/minute")
+    def ntfy_send():
+        """Used by the browser to mirror a task/meeting pop-up to ntfy, and by
+        the Settings "Send test" button."""
+        if not request.is_json:
+            return jsonify({"error": "Content-Type must be application/json"}), 415
+        body = _json_body() or {}
+        msg = (body.get("message") or "").strip()
+        if not msg:
+            return jsonify({"error": "Message is required"}), 400
+        settings = dict(DEFAULT_SETTINGS)
+        settings.update(load_settings(current_user.id))
+        # Settings sent in the body let the test button work against unsaved
+        # values, but only ever for this user's own send - never persisted.
+        for k in ("ntfyUrl", "ntfyTopic", "ntfyIcon"):
+            if isinstance(body.get(k), str):
+                settings[k] = body[k]
+        try:
+            priority = int(body.get("priority", 3))
+        except (TypeError, ValueError):
+            priority = 3
+        ok, reason = ntfy_mod.send(settings, msg[:500],
+                                   title=str(body.get("title") or "TimePilot")[:120],
+                                   tags=str(body.get("tag") or "alarm_clock")[:60],
+                                   priority=min(max(priority, 1), 5))
+        if not ok:
+            logger.warning("ntfy send failed for user %s: %s", current_user.id, reason)
+            return jsonify({"ok": False, "error": reason}), 502
+        return jsonify({"ok": True})
 
     @app.route("/api/export")
     @login_required
@@ -533,6 +702,18 @@ def create_app():
             })
         events.sort(key=lambda e: e["start"])
         return jsonify({"date": day, "events": events, "source": source, "warn": warn})
+
+    # Scheduled reminders must fire with no browser open, so dispatch happens
+    # here rather than in the client. Skipped under `flask run --debug`, whose
+    # reloader would otherwise start a second thread in the parent process.
+    if not (app.debug and not os.environ.get("WERKZEUG_RUN_MAIN")):
+        ntfy_mod.start_dispatcher(
+            app, db,
+            load_settings=load_settings,
+            load_reminders=load_reminders,
+            save_reminders=save_reminders,
+            list_user_ids=lambda: [u.id for u in User.query.all()],
+        )
 
     return app
 

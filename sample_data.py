@@ -37,6 +37,11 @@ def build():
             "rounding": 15,
             "remind": True,
             "remindLead": 5,
+            "remindMeetings": False,
+            "ntfyUrl": "https://ntfy.sh",
+            "ntfyTopic": "",
+            "ntfyIcon": "",
+            "ntfyTasks": False,
             "interrupts": ["Message", "Email", "Call", "Meeting"],
             "ignoreEvents": ["Private Appointment"],
             "categories": [
@@ -92,6 +97,7 @@ def build():
             {"id": "p2", "title": "Status update template", "category": "Reports", "desc": "Weekly format", "body": "## Weekly Update\n\n**Done this week**\n- \n\n**In progress**\n- \n\n**Blockers**\n- \n\n**Next week**\n- "},
             {"id": "p3", "title": "Out of office", "category": "Email", "desc": "", "body": "I'm currently out of office and will respond on my return on {date}. For anything urgent, please contact {colleague}."},
         ],
+        "reminders": [],
         "activeTimer": None,
         "calSeen": {},
     }

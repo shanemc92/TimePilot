@@ -36,6 +36,8 @@ services:
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:?FLASK_SECRET_KEY is not set - see .env.example}
       TIMEPILOT_MASTER_KEY: ${TIMEPILOT_MASTER_KEY:?TIMEPILOT_MASTER_KEY is not set - see .env.example}
       SESSION_COOKIE_SECURE: "true"
+      # Only needed if your ntfy server is on a private address - see .env.example
+      TIMEPILOT_ALLOW_PRIVATE_NTFY: ${TIMEPILOT_ALLOW_PRIVATE_NTFY:-false}
     depends_on:
       postgres:
         condition: service_healthy
