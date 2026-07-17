@@ -38,6 +38,10 @@ services:
       SESSION_COOKIE_SECURE: "true"
       # Only needed if your ntfy server is on a private address - see .env.example
       TIMEPILOT_ALLOW_PRIVATE_NTFY: ${TIMEPILOT_ALLOW_PRIVATE_NTFY:-false}
+      # Optional login-page banner - blank by default, see .env.example
+      TIMEPILOT_LOGIN_BANNER: ${TIMEPILOT_LOGIN_BANNER:-}
+      # Optional - disable public signup, see .env.example
+      TIMEPILOT_DISABLE_SIGNUP: ${TIMEPILOT_DISABLE_SIGNUP:-false}
     depends_on:
       postgres:
         condition: service_healthy

@@ -24,6 +24,8 @@ input:focus{outline:2px solid var(--accent);outline-offset:1px}
 .errors{color:var(--danger);font-size:12px;margin-top:3px}
 .flash{background:color-mix(in srgb, var(--danger) 15%, transparent);border:1px solid var(--danger);
   color:var(--text);border-radius:7px;padding:8px 10px;font-size:13px;margin-bottom:14px}
+.notice{background:color-mix(in srgb, var(--accent) 15%, transparent);border:1px solid var(--accent);
+  color:var(--text);border-radius:7px;padding:8px 10px;font-size:13px;margin-bottom:14px;text-align:center}
 button{width:100%;background:var(--accent);color:#121417;border:none;border-radius:7px;padding:10px;
   font-size:14px;font-weight:600;cursor:pointer;margin-top:6px}
 button:hover{opacity:.92}
@@ -39,6 +41,7 @@ button:hover{opacity:.92}
     <h1>TimePilot</h1>
   </div>
   <div class="sub">{% block subtitle %}{% endblock %}</div>
+  {% if login_banner %}<div class="notice">{{ login_banner }}</div>{% endif %}
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}
   {% endwith %}

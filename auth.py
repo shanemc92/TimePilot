@@ -1,7 +1,8 @@
 import logging
+import os
 import re
 
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
@@ -18,6 +19,26 @@ bp = Blueprint("auth", __name__)
 logger = logging.getLogger("timepilot")
 
 USERNAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+# Optional banner shown above the login/signup forms - e.g. a public demo
+# instance warning that data gets wiped on a schedule. Blank/unset (the
+# default) shows nothing. Read once at import rather than per-request since
+# it only ever changes via a container restart anyway.
+LOGIN_BANNER = os.environ.get("TIMEPILOT_LOGIN_BANNER", "").strip()
+
+# When set, only existing accounts can log in - /signup 404s and the
+# "Sign up" link disappears from the login page. Meant for a demo instance
+# seeded via sample_data.py, where you want the one demo account reachable
+# but don't want strangers registering their own.
+SIGNUP_DISABLED = os.environ.get("TIMEPILOT_DISABLE_SIGNUP", "").strip().lower() in ("1", "true", "yes")
+
+
+@bp.app_context_processor
+def _inject_login_banner():
+    # app_context_processor (not bp.context_processor) so it's also available
+    # if index.html or another non-auth template ever wants it - harmless
+    # either way since it's blank by default.
+    return {"login_banner": LOGIN_BANNER, "signup_disabled": SIGNUP_DISABLED}
 
 # A fixed dummy hash so login always pays the same hashing cost whether or
 # not the username exists - otherwise "unknown user" returns fast (no hash
@@ -51,6 +72,10 @@ class LoginForm(FlaskForm):
 @bp.route("/signup", methods=["GET", "POST"])
 @limiter.limit("10/minute")
 def signup():
+    if SIGNUP_DISABLED:
+        # 404 rather than a redirect/403: it should look like the route was
+        # never registered, not like there's a gate here worth probing.
+        abort(404)
     if current_user.is_authenticated:
         return redirect(url_for("index"))
     form = SignupForm()

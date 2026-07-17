@@ -194,6 +194,23 @@ tab.
 in `.env.example` - private targets are opt-in, for the reason described
 under "Security notes" below.
 
+## Login page banner (optional)
+
+Set `TIMEPILOT_LOGIN_BANNER` in `.env` to show a message above the login and
+signup forms - blank/unset (the default) shows nothing. Useful for a public
+demo instance:
+
+```
+TIMEPILOT_LOGIN_BANNER=Demo instance - all data is wiped every 24 hours.
+```
+
+Set `TIMEPILOT_DISABLE_SIGNUP=true` to close public registration entirely -
+`/signup` 404s and the "Sign up" link disappears from the login page, so only
+accounts that already exist (e.g. one seeded with `sample_data.py`) can log
+in. The two combine naturally for a demo instance: a banner explaining the
+data-wipe schedule, with signup disabled so there's exactly one shared demo
+account rather than an open registration page.
+
 ## Security notes
 
 **Encryption at rest.** Every user's tasks, notes, snippets, settings, and

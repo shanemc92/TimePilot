@@ -16,5 +16,5 @@
   </div>
   {{ form.submit() }}
 </form>
-<div class="switch">No account? <a href="{{ url_for('auth.signup') }}">Sign up</a></div>
+{% if not signup_disabled %}<div class="switch">No account? <a href="{{ url_for('auth.signup') }}">Sign up</a></div>{% endif %}
 {% endblock %}
