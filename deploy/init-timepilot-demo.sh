@@ -59,11 +59,13 @@ step_updates() { apt update && apt -y upgrade; }
 run_step "apt update & upgrade" check_updates step_updates
 
 ### 2. Base deps ###
-check_deps() { dpkg -s nginx certbot python3-certbot-dns-cloudflare git openssl iptables-persistent >/dev/null 2>&1; }
+check_deps() { dpkg -s nginx certbot python3-certbot-dns-cloudflare git openssl iptables-persistent cron >/dev/null 2>&1 && systemctl is-active --quiet cron; }
 step_deps() {
     echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
     echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
-    apt install -y ca-certificates curl gnupg nginx certbot python3-certbot-dns-cloudflare git openssl iptables-persistent
+    # Ubuntu 24.04 minimal doesn't ship cron by default — needed for the nightly reset job.
+    apt install -y ca-certificates curl gnupg nginx certbot python3-certbot-dns-cloudflare git openssl iptables-persistent cron
+    systemctl enable --now cron
 }
 run_step "install base dependencies" check_deps step_deps
 
@@ -480,11 +482,11 @@ EOF
 
     cat > /etc/cron.d/timepilot-demo-reset <<'EOF'
 # Wipes the DB, reseeds demo data, and cleans logs/temp files daily so the box stays ephemeral.
-0 3 * * * root /opt/TimePilot/daily-reset.sh >> /var/log/timepilot-demo-reset.log 2>&1
+0 0 * * * root /opt/TimePilot/daily-reset.sh >> /var/log/timepilot-demo-reset.log 2>&1
 EOF
     chmod 600 /etc/cron.d/timepilot-demo-reset
 
-    # Seed it once now too, so there's demo data immediately rather than waiting for 3am
+    # Seed it once now too, so there's demo data immediately rather than waiting for midnight
     # (no wipe needed here — the DB was just created fresh moments ago by the earlier compose-up step)
     cd /opt/TimePilot && docker compose exec -T timepilot python sample_data.py --username "${DEMO_USERNAME}" --password "${DEMO_PASSWORD}" --force
 }

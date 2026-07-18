@@ -5,6 +5,8 @@ exporter for multiple users - Kanban board, calendar-aware day view, code
 snippet & clipboard libraries, all behind your own login. Data is encrypted
 at rest in PostgreSQL.
 
+See [CHANGELOG.md](CHANGELOG.md) for what's changed release to release.
+
 ![TimePilot demo](docs/demo.gif)
 
 ![TimePilot screenshot](docs/screenshot.png)
@@ -141,6 +143,19 @@ docker compose exec timepilot python sample_data.py
 # --no-ics skips the demo calendar; --force resets an existing demo account
 ```
 
+**Running a public demo instance:** [`deploy/init-timepilot-demo.sh`](deploy/init-timepilot-demo.sh)
+automates standing up a whole demo box from a fresh Ubuntu server - SSH
+hardening (custom port, key-only login, fail2ban), a firewall locked to
+SSH+HTTPS only, unattended security upgrades, Docker install, cloning this
+repo, generating `.env` secrets, syncing a Cloudflare DNS record and
+obtaining a Let's Encrypt certificate, an nginx reverse proxy, ntfy
+notifications for setup progress/failures, and a nightly cron job that
+fully wipes the database and reseeds it via `sample_data.py` with a fresh
+random password each time (spliced into `TIMEPILOT_LOGIN_BANNER`). It's
+idempotent - re-run it any time to pick up config changes without
+disturbing what's already set up. Edit the variables block at the top of
+the script before running it; every value is commented inline.
+
 ## Calendar (optional)
 
 TimePilot reads your calendar from an **iCalendar (ICS)** feed - it never
@@ -271,8 +286,8 @@ docker compose up -d
 
 This restarts only the `timepilot` container - Postgres keeps running, so
 it's a few seconds of downtime, not a full stack restart. **Take a backup
-first** (see below) if the release notes for the new version mention a
-database change.
+first** (see below) if [CHANGELOG.md](CHANGELOG.md) mentions a database
+change for the new version.
 
 Built your own image instead (option 2 above)? Pull the latest source,
 `docker compose up --build -d` again.
