@@ -22,6 +22,12 @@ FAIL2BAN_FINDTIME=600               # <-- window within which maxretry failures 
 LOG_FILE="/var/log/timepilot-init.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
+# Prevent apt/dpkg from blocking on interactive prompts during a headless run.
+# Ubuntu 24.04's needrestart in particular will otherwise stall waiting for TTY input.
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
+
 notify() {
     curl -fsS -m 10 -H "Title: $1" -H "Tags: ${3:-}" -d "$2" "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null 2>&1 || true
 }
@@ -59,11 +65,13 @@ step_updates() { apt update && apt -y upgrade; }
 run_step "apt update & upgrade" check_updates step_updates
 
 ### 2. Base deps ###
-check_deps() { dpkg -s nginx certbot python3-certbot-dns-cloudflare git openssl iptables-persistent >/dev/null 2>&1; }
+check_deps() { dpkg -s nginx certbot python3-certbot-dns-cloudflare git openssl iptables-persistent cron >/dev/null 2>&1 && systemctl is-active --quiet cron; }
 step_deps() {
     echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
     echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
-    apt install -y ca-certificates curl gnupg nginx certbot python3-certbot-dns-cloudflare git openssl iptables-persistent
+    # Ubuntu 24.04 minimal doesn't ship cron by default — needed for the nightly reset job.
+    apt install -y ca-certificates curl gnupg nginx certbot python3-certbot-dns-cloudflare git openssl iptables-persistent cron
+    systemctl enable --now cron
 }
 run_step "install base dependencies" check_deps step_deps
 
@@ -92,6 +100,11 @@ step_ssh_hardening() {
     if [[ -f /etc/ssh/sshd_config.d/99-hardening.conf ]]; then
         old_port=$(grep -oP '^Port \K[0-9]+' /etc/ssh/sshd_config.d/99-hardening.conf 2>/dev/null || echo "22")
     fi
+
+    # sshd -t (and sshd itself) requires the privilege-separation dir. On a fresh boot where we've
+    # just disabled ssh.socket, ssh.service may not have started yet to create it — make it ourselves.
+    mkdir -p /run/sshd
+    chmod 0755 /run/sshd
 
     # Open the new port first so sshd has somewhere safe to land before we touch its config
     iptables -C INPUT -p tcp --dport "${SSH_PORT}" -j ACCEPT >/dev/null 2>&1 \
@@ -266,13 +279,36 @@ check_demo_env() {
 step_demo_env() {
     cd /opt/TimePilot
     local banner
-    banner=$(printf "${TIMEPILOT_LOGIN_BANNER_TEMPLATE}" "${DEMO_PASSWORD}")
+    # Substitute the literal %s placeholder rather than using printf, so a template containing
+    # other % characters (e.g. "50% off") isn't misinterpreted as a printf format spec.
+    banner="${TIMEPILOT_LOGIN_BANNER_TEMPLATE//%s/${DEMO_PASSWORD}}"
     grep -q '^TIMEPILOT_DISABLE_SIGNUP=' .env \
         && sed -i "s|^TIMEPILOT_DISABLE_SIGNUP=.*|TIMEPILOT_DISABLE_SIGNUP=${TIMEPILOT_DISABLE_SIGNUP}|" .env \
         || echo "TIMEPILOT_DISABLE_SIGNUP=${TIMEPILOT_DISABLE_SIGNUP}" >> .env
-    grep -q '^TIMEPILOT_LOGIN_BANNER=' .env \
-        && sed -i "s|^TIMEPILOT_LOGIN_BANNER=.*|TIMEPILOT_LOGIN_BANNER=${banner}|" .env \
-        || echo "TIMEPILOT_LOGIN_BANNER=${banner}" >> .env
+    # Write the banner via python (not sed) — the banner is free text that may contain characters
+    # like | that would collide with sed's delimiter, or & that sed treats specially.
+    BANNER_VALUE="${banner}" python3 - <<'PY'
+import os
+path = ".env"
+key = "TIMEPILOT_LOGIN_BANNER"
+val = os.environ["BANNER_VALUE"]
+lines = []
+found = False
+try:
+    with open(path) as f:
+        lines = f.read().splitlines()
+except FileNotFoundError:
+    pass
+for i, line in enumerate(lines):
+    if line.startswith(key + "="):
+        lines[i] = f"{key}={val}"
+        found = True
+        break
+if not found:
+    lines.append(f"{key}={val}")
+with open(path, "w") as f:
+    f.write("\n".join(lines) + "\n")
+PY
 }
 run_step "set demo-mode env vars" check_demo_env step_demo_env
 
@@ -315,8 +351,18 @@ run_step "docker compose up" check_compose_up step_compose_up
 
 check_healthcheck() { curl -fsS http://127.0.0.1:5170/healthz >/dev/null 2>&1; }
 step_healthcheck() {
-    for i in {1..12}; do
+    cd /opt/TimePilot
+    for i in {1..30}; do
         if curl -fsS http://127.0.0.1:5170/healthz >/dev/null 2>&1; then return 0; fi
+        # The app isn't safe against concurrent schema creation across gunicorn workers on a fresh
+        # DB — a worker can lose a CREATE TABLE race and crash the container into a restart loop.
+        # A plain "up -d" is a no-op against a restarting container, so force-recreate when it isn't
+        # running. The proxy network already exists (full up -d ran above), so a scoped recreate
+        # safely reconnects it; fall back to full up -d if the network somehow went away.
+        state=$(docker inspect -f '{{.State.Status}}' timepilot-timepilot-1 2>/dev/null || echo missing)
+        if [[ "$state" != "running" ]]; then
+            docker compose up -d --force-recreate timepilot >/dev/null 2>&1 || docker compose up -d >/dev/null 2>&1
+        fi
         sleep 5
     done
     return 1
@@ -443,28 +489,69 @@ run_step "install renewal hook" check_renew_hook step_renew_hook
 check_daily_reset() {
     [[ -x /opt/TimePilot/daily-reset.sh ]] || return 1
     [[ -f /etc/cron.d/timepilot-demo-reset ]] || return 1
-    grep -qF "${TIMEPILOT_LOGIN_BANNER_TEMPLATE}" /opt/TimePilot/daily-reset.sh || return 1
+    # daily-reset.sh bakes in the banner as prefix + ${NEW_PASSWORD} + suffix, so match on the
+    # fixed prefix text (before %s) rather than the full template string.
+    local banner_prefix="${TIMEPILOT_LOGIN_BANNER_TEMPLATE%%%s*}"
+    grep -qF "${banner_prefix}" /opt/TimePilot/daily-reset.sh || return 1
     grep -qF "\"${DEMO_USERNAME}\"" /opt/TimePilot/daily-reset.sh || return 1
 }
 step_daily_reset() {
+    # Pre-compute the banner prefix/suffix around the %s placeholder so daily-reset.sh can rebuild
+    # the banner each night with a fresh password, without depending on any init-script variable
+    # existing at cron runtime (which it wouldn't — that would crash under set -u).
+    local banner_prefix="${TIMEPILOT_LOGIN_BANNER_TEMPLATE%%%s*}"
+    local banner_suffix="${TIMEPILOT_LOGIN_BANNER_TEMPLATE##*%s}"
     cat > /opt/TimePilot/daily-reset.sh <<EOF
 #!/usr/bin/env bash
 set -uo pipefail
 cd /opt/TimePilot
 
-# Generate a fresh demo password for today and splice it into the login banner
+# Generate a fresh demo password for today and splice it into the login banner.
+# Prefix/suffix are baked in literally at generation time; python (not sed) writes .env so
+# a | or & in the banner text can't break the substitution.
 NEW_PASSWORD=\$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 12)
-BANNER=\$(printf "${TIMEPILOT_LOGIN_BANNER_TEMPLATE}" "\${NEW_PASSWORD}")
-sed -i "s|^TIMEPILOT_LOGIN_BANNER=.*|TIMEPILOT_LOGIN_BANNER=\${BANNER}|" .env
+BANNER="${banner_prefix}\${NEW_PASSWORD}${banner_suffix}"
+BANNER_VALUE="\${BANNER}" python3 - <<'PY'
+import os
+path = ".env"
+key = "TIMEPILOT_LOGIN_BANNER"
+val = os.environ["BANNER_VALUE"]
+lines = []
+found = False
+try:
+    with open(path) as f:
+        lines = f.read().splitlines()
+except FileNotFoundError:
+    pass
+for i, line in enumerate(lines):
+    if line.startswith(key + "="):
+        lines[i] = f"{key}={val}"
+        found = True
+        break
+if not found:
+    lines.append(f"{key}={val}")
+with open(path, "w") as f:
+    f.write("\n".join(lines) + "\n")
+PY
 
 # Full wipe: tear down and drop the postgres volume so the app recreates its schema from scratch,
 # same as a brand-new install. (docker compose down -v only touches this project's own volumes.)
 docker compose down -v
 docker compose up -d
 
-# Wait for the app to report healthy before reseeding
-for i in {1..24}; do
+# Wait for the app to become healthy. The app isn't safe against concurrent schema creation
+# across gunicorn workers on a freshly-wiped DB — one worker can lose a CREATE TABLE race and
+# crash the container, which then enters a restart loop (restart: unless-stopped). A plain
+# "up -d" is a no-op against an already-existing/restarting container, so we force-recreate
+# when timepilot isn't in the running state. --force-recreate tears down the looping container
+# and starts it clean; on an empty DB the winning worker usually creates the schema before the
+# next crash, so a couple of forced recreates reliably converges.
+for i in {1..30}; do
     curl -fsS http://127.0.0.1:5170/healthz >/dev/null 2>&1 && break
+    state=\$(docker inspect -f '{{.State.Status}}' timepilot-timepilot-1 2>/dev/null || echo missing)
+    if [[ "\$state" != "running" ]]; then
+        docker compose up -d --force-recreate timepilot >/dev/null 2>&1 || docker compose up -d >/dev/null 2>&1
+    fi
     sleep 5
 done
 
@@ -480,11 +567,11 @@ EOF
 
     cat > /etc/cron.d/timepilot-demo-reset <<'EOF'
 # Wipes the DB, reseeds demo data, and cleans logs/temp files daily so the box stays ephemeral.
-0 3 * * * root /opt/TimePilot/daily-reset.sh >> /var/log/timepilot-demo-reset.log 2>&1
+0 0 * * * root /opt/TimePilot/daily-reset.sh >> /var/log/timepilot-demo-reset.log 2>&1
 EOF
     chmod 600 /etc/cron.d/timepilot-demo-reset
 
-    # Seed it once now too, so there's demo data immediately rather than waiting for 3am
+    # Seed it once now too, so there's demo data immediately rather than waiting for midnight
     # (no wipe needed here — the DB was just created fresh moments ago by the earlier compose-up step)
     cd /opt/TimePilot && docker compose exec -T timepilot python sample_data.py --username "${DEMO_USERNAME}" --password "${DEMO_PASSWORD}" --force
 }
@@ -493,8 +580,8 @@ run_step "schedule daily ephemeral reset" check_daily_reset step_daily_reset
 ### 14. Final verification (always runs, cheap, no state to guard) ###
 sleep "${DNS_PROPAGATION_BUFFER}"
 if curl -fsSk "https://${DOMAIN}/healthz" >/dev/null 2>&1; then
-    notify "TimePilot setup: COMPLETE" "https://${DOMAIN}/ is live." "tada"
-    echo "Done. Visit https://${DOMAIN}/"
+    notify "TimePilot setup: COMPLETE" "https://${DOMAIN}/login is live." "tada"
+    echo "Done. Visit https://${DOMAIN}/login"
 else
     notify "TimePilot setup: FAILED" "All steps reported OK but https://${DOMAIN}/healthz is not responding." "rotating_light"
     exit 1

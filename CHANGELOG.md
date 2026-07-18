@@ -273,3 +273,18 @@ chronological order (oldest first).
   reseeds it with `sample_data.py` under a freshly generated password
   spliced into the login banner.
 - **FEATURE:** Added this changelog (`CHANGELOG.md`).
+- **BUGFIX:** Without `--preload`, each gunicorn worker imports `app.py`
+  independently in its own forked process, and `create_app()` runs
+  `db.create_all()` as a side effect of that import - so on a freshly
+  wiped/empty database, N workers booting together raced the same schema
+  creation. SQLAlchemy's `create_all()` inspects for existing tables, then
+  issues a plain `CREATE TABLE` (no `IF NOT EXISTS`) for whatever's
+  missing; two workers landing on that inspect step together both see
+  "missing" and both try to create it, and the loser crashes on "relation
+  already exists" and gets respawned by gunicorn - typically converging
+  after one or two respawns, but a genuine race, not a deliberate retry
+  loop. Reproduced directly (7 of 8 concurrent imports against an empty DB
+  crashed) and fixed with a one-shot `entrypoint.sh` that creates the
+  schema once, in a single process, before gunicorn ever forks a worker -
+  verified the same 8-way concurrent import against an already-initialized
+  DB with zero failures.

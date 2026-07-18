@@ -12,6 +12,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+RUN chmod +x entrypoint.sh
 
 # Runs as a non-root user
 RUN useradd -m -u 1000 timepilot && chown -R timepilot:timepilot /app
@@ -29,4 +30,8 @@ EXPOSE 5170
 # per-worker ICS cache and in-memory rate-limiter state (each worker counts
 # independently, so N workers ~ N x the intended limit). Override the
 # command in docker-compose.yml if you need more throughput.
+#
+# entrypoint.sh creates the DB schema once, in a single process, before any
+# of this runs - see the comments in that file for why that matters.
+ENTRYPOINT ["./entrypoint.sh"]
 CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5170", "--no-control-socket", "--access-logfile", "-", "app:app"]
