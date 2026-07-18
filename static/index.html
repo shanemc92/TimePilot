@@ -577,12 +577,37 @@ function editTimerModal(){
   openModal(`<h3>Edit current task</h3>
     <div class="fRow"><label>Task name</label><input id="etName" value="${esc(t.label)}"></div>
     <div class="fRow"><label>Category</label><select id="etCat">${allCats().map(c=>`<option value="${c.k}"${curCat===c.k?" selected":""}>${esc(c.label)}</option>`).join("")}</select></div>
-    <div class="fRow"><label>Start time (now: running ${fmtDur((Date.now()-st)/60000)})</label><input id="etStart" type="time" value="${pad(st.getHours())}:${pad(st.getMinutes())}"></div>
+    <div class="fRow"><label>Start time (now: running ${fmtDur((Date.now()-st)/60000)})</label><input id="etStart" type="time" value="${pad(st.getHours())}:${pad(st.getMinutes())}">
+      <div id="etSyncNote" class="small muted" style="margin-top:4px"></div></div>
     <div class="mActions"><button class="danger" id="etDiscard">Discard timer</button><button id="mCancel">Cancel</button><button class="primary" id="etSave">Save</button></div>`);
+  const oldStartHM = pad(st.getHours())+":"+pad(st.getMinutes());
+  // Live preview of the previous-task sync, recomputed on every keystroke so
+  // it's never a silent no-op - if the guard is going to block it (or the
+  // setting is off, or there's nothing to sync), you see why *before*
+  // clicking Save, not after checking the Export tab and finding nothing changed.
+  const updateSyncNote = () => {
+    const note = $("#etSyncNote"), val = $("#etStart").value;
+    if(!val || val === oldStartHM){ note.textContent = ""; return; }
+    if(S.settings.syncLastTaskEnd === false){
+      note.textContent = "Previous-task syncing is off (Settings → Categories & timers).";
+      note.className = "small muted"; return;
+    }
+    const last = lastTimelogEntryToday();
+    if(!last){ note.textContent = "No earlier entry logged today to adjust."; note.className = "small muted"; return; }
+    if(last.end === val){ note.textContent = `Already matches "${last.label}" - nothing to adjust.`; note.className = "small muted"; return; }
+    const mins = hmToMin(val) - hmToMin(last.start);
+    if(mins < 1){
+      note.textContent = `Won't adjust "${last.label}" - that start is before it began (${last.start}).`;
+      note.className = "small errText";
+    } else {
+      note.textContent = `Will extend "${last.label}" (currently ends ${last.end}) to ${val}.`;
+      note.className = "small muted";
+    }
+  };
+  $("#etStart").addEventListener("input", updateSyncNote);
   $("#etSave").onclick = () => {
     const name = $("#etName").value.trim(); if(!name){ alert("Task name required."); return; }
     t.label = name; t.category = $("#etCat").value;
-    const oldStartHM = pad(st.getHours())+":"+pad(st.getMinutes());
     const [h,m] = $("#etStart").value.split(":").map(Number);
     const ns = new Date(st); ns.setHours(h, m, 0, 0);
     if(ns > new Date()){ alert("Start time can't be in the future."); return; }
@@ -594,7 +619,8 @@ function editTimerModal(){
         // Only pull the boundary - never push it past the previous entry's
         // OWN start (that would invert or zero out its duration). If the new
         // start lands earlier than that, leave the previous entry alone
-        // rather than silently corrupting its logged time.
+        // rather than silently corrupting its logged time. (The live note
+        // above already told you this was going to happen.)
         if(mins >= 1){ last.end = newStartHM; last.minutes = mins; }
       }
     }
