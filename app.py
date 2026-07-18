@@ -65,6 +65,7 @@ DEFAULT_SETTINGS = {
     "remind": True,
     "remindLead": 5,
     "remindMeetings": False,
+    "syncLastTaskEnd": True,
     "browserNotifications": False,
     "ntfyUrl": "https://ntfy.sh",
     "ntfyTopic": "",

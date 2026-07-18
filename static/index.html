@@ -557,6 +557,19 @@ function renderStrip(){
   });
   tick();
 }
+// Today's timelog entry with the latest end time - i.e. whatever was logged
+// immediately before "now". That's the entry a backdated timer start should
+// extend to meet, since it's the thing that left the gap in the first place.
+function lastTimelogEntryToday(){
+  const day = todayISO();
+  let best = null, bestMin = -1;
+  S.timelog.forEach(e => {
+    if(e.date !== day) return;
+    const m = hmToMin(e.end);
+    if(m > bestMin){ best = e; bestMin = m; }
+  });
+  return best;
+}
 function editTimerModal(){
   const t = S.activeTimer; if(!t) return;
   const st = new Date(t.start);
@@ -569,11 +582,24 @@ function editTimerModal(){
   $("#etSave").onclick = () => {
     const name = $("#etName").value.trim(); if(!name){ alert("Task name required."); return; }
     t.label = name; t.category = $("#etCat").value;
+    const oldStartHM = pad(st.getHours())+":"+pad(st.getMinutes());
     const [h,m] = $("#etStart").value.split(":").map(Number);
     const ns = new Date(st); ns.setHours(h, m, 0, 0);
     if(ns > new Date()){ alert("Start time can't be in the future."); return; }
+    const newStartHM = pad(h)+":"+pad(m);
+    if(S.settings.syncLastTaskEnd !== false && newStartHM !== oldStartHM){
+      const last = lastTimelogEntryToday();
+      if(last && last.end !== newStartHM){
+        const mins = hmToMin(newStartHM) - hmToMin(last.start);
+        // Only pull the boundary - never push it past the previous entry's
+        // OWN start (that would invert or zero out its duration). If the new
+        // start lands earlier than that, leave the previous entry alone
+        // rather than silently corrupting its logged time.
+        if(mins >= 1){ last.end = newStartHM; last.minutes = mins; }
+      }
+    }
     t.start = ns.toISOString();
-    markDirty(); closeModal(); renderStrip();
+    markDirty(); closeModal(); renderStrip(); if(view==="export") renderExport();
   };
   $("#etDiscard").onclick = () => {
     if(!confirm("Discard the running timer without logging it?")) return;
@@ -1519,7 +1545,10 @@ $("#settingsBtn").onclick = () => {
     ${sec("Categories &amp; timers", `
       <div class="fRow"><label>Task categories</label><div id="sCats"></div>
         <button id="sCatAdd" class="ghost small" type="button">+ Add category</button></div>
-      <div class="fRow"><label>Interrupt quick-timers (one per line)</label><textarea id="sInt" rows="4">${esc((s.interrupts||[]).join("\n"))}</textarea></div>`)}
+      <div class="fRow"><label>Interrupt quick-timers (one per line)</label><textarea id="sInt" rows="4">${esc((s.interrupts||[]).join("\n"))}</textarea></div>
+      <div class="fRow"><label>Forgot to hit Start?</label>
+        <label class="small"><input type="checkbox" id="sSyncLastEnd"${s.syncLastTaskEnd!==false?" checked":""}> when I correct a timer's start time, extend the previous task to match</label>
+        <span class="small muted">Backdating a timer's start (via the running-timer label → edit) moves the previous logged task's end time to line up with it, so there's no unlogged gap between them. Only ever pulls that boundary - it won't touch anything else in the timesheet.</span></div>`)}
     ${sec("Calendar", `
       <div class="fRow"><label>Exchange published calendar ICS URL</label><input id="sIcs" value="${esc(s.icsUrl||"")}" placeholder="https://outlook.office365.com/owa/calendar/.../calendar.ics"></div>
       <div class="fRow"><label>...or upload a .ics file (used as fallback if the URL is empty or unreachable)</label>
@@ -1660,6 +1689,7 @@ $("#settingsBtn").onclick = () => {
       viewStart:$("#sViewStart").value, viewEnd:$("#sViewEnd").value,
       lunchStart, lunchEnd,
       remind:$("#sRemind").checked, remindLead:+$("#sLead").value||0,
+      syncLastTaskEnd:$("#sSyncLastEnd").checked,
       remindMeetings:$("#sRemindMeetings").checked,
       browserNotifications:$("#sBrowserNotif").checked,
       ntfyUrl:$("#sNtfyUrl").value.trim(), ntfyTopic:$("#sNtfyTopic").value.trim(),

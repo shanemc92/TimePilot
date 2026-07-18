@@ -131,12 +131,14 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml \
   up -d --pull always timepilot postgres
 ```
 
-**Demo data:** seed a demo account with example tasks/history so there's
-something to look at immediately:
+**Demo data:** seed a demo account with example tasks/history/notes/snippets
+and a demo calendar (a few days of meetings, so the Today view and calendar
+reminders aren't empty either) so there's something to look at immediately:
 
 ```bash
 docker compose exec timepilot python sample_data.py
 # -> user 'demo', password 'demo1234' - change the password after logging in
+# --no-ics skips the demo calendar; --force resets an existing demo account
 ```
 
 ## Calendar (optional)
