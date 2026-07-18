@@ -1883,7 +1883,7 @@ function reminderModal(t){
 }
 setInterval(checkReminders, 20000);
 
-let _rzT;
+let _rzT, _rzW = window.innerWidth;
 window.addEventListener("resize", () => {
   clearTimeout(_rzT);
   _rzT = setTimeout(()=>{
@@ -1893,7 +1893,14 @@ window.addEventListener("resize", () => {
     // unslotted-task inputs aren't tied to app state until "Slot" is clicked.
     const ae = document.activeElement;
     if(ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
-    if(view==="today") renderToday();
+    // Mobile browsers also fire "resize" purely from their own address bar
+    // collapsing/expanding as you scroll - innerHeight shifts, innerWidth
+    // doesn't. Since the timeline's row height is derived from innerHeight
+    // (see renderToday), reacting to that made every scroll subtly rescale
+    // the whole timeline mid-motion. A real resize - including rotating the
+    // device - always changes width too, so that's the signal to act on.
+    const w = window.innerWidth, changed = w !== _rzW; _rzW = w;
+    if(changed && view==="today") renderToday();
   }, 150);
 });
 
