@@ -42,6 +42,8 @@ services:
       TIMEPILOT_LOGIN_BANNER: ${TIMEPILOT_LOGIN_BANNER:-}
       # Optional - disable public signup, see .env.example
       TIMEPILOT_DISABLE_SIGNUP: ${TIMEPILOT_DISABLE_SIGNUP:-false}
+      # Optional - rate-limit storage backend, see .env.example
+      TIMEPILOT_RATELIMIT_STORAGE_URI: ${TIMEPILOT_RATELIMIT_STORAGE_URI:-memory://}
     depends_on:
       postgres:
         condition: service_healthy

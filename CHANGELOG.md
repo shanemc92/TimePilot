@@ -288,3 +288,27 @@ chronological order (oldest first).
   schema once, in a single process, before gunicorn ever forks a worker -
   verified the same 8-way concurrent import against an already-initialized
   DB with zero failures.
+
+## Mobile & login page polish
+
+- **BUGFIX:** The Today timeline's row heights are derived from
+  `window.innerHeight`, recomputed on a `resize` listener. Mobile browsers
+  also fire `resize` purely from their own address bar collapsing/expanding
+  as you scroll (`innerHeight` shifts, `innerWidth` doesn't) - reacting to
+  that was subtly rescaling the whole timeline mid-scroll. Now only a width
+  change (a real resize or device rotation) triggers a re-render.
+- **BUGFIX:** WTForms' `SubmitField` renders as `<input type="submit">`,
+  not a `<button>` - the login/signup page's CSS only themed `button`, so
+  the submit control silently fell back to the browser's default unstyled
+  grey button despite the rest of the page (and the stylesheet's intent)
+  being themed. Widened the CSS selector to cover both.
+- **BUGFIX:** flask-limiter warned on every startup about using in-memory
+  rate-limit storage with none explicitly specified. The omission wasn't
+  actually a bug - in-memory is a reasonable default for this app's threat
+  model and worker count - so declared it explicitly
+  (`storage_uri="memory://"`) to silence the warning and make the choice
+  visible in code, and added `TIMEPILOT_RATELIMIT_STORAGE_URI` so anyone
+  running more workers/replicas who wants limits actually shared can point
+  it at Redis instead. Confirmed rate limiting still fires (429s / log
+  lines) unchanged after the change - only the storage declaration moved
+  from implicit to explicit.

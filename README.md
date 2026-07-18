@@ -271,11 +271,15 @@ signups, data exports/imports, and calendar uploads are logged to stdout -
 
 **What's not included:** no "forgot password" flow (reset one directly in
 the database if needed), no email verification, no 2FA.
-The rate limiter's storage is in-memory, which is fine for a single
-`timepilot` container but won't coordinate correctly if you ever run more
-than one replica. There's no automatic schema migration tool - a future
-release that changes the database shape will need a manual step; check
-release notes before updating if that concerns you.
+The rate limiter's storage is in-memory by default (declared explicitly as
+`memory://` - not just left unset - so `docker compose logs` won't show
+flask-limiter's "no storage specified" warning), which is fine for a
+single `timepilot` container but won't coordinate correctly across more
+than one worker/replica. Set `TIMEPILOT_RATELIMIT_STORAGE_URI` to a Redis
+URL if you need limits actually shared - see `.env.example`. There's no
+automatic schema migration tool - a future release that changes the
+database shape will need a manual step; check release notes before
+updating if that concerns you.
 
 ## Updating
 
