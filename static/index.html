@@ -600,7 +600,7 @@ function editTimerModal(){
       note.textContent = `Won't adjust "${last.label}" - that start is before it began (${last.start}).`;
       note.className = "small errText";
     } else {
-      note.textContent = `Will extend "${last.label}" (currently ends ${last.end}) to ${val}.`;
+      note.textContent = `Will adjust "${last.label}" (currently ends ${last.end}) to ${val}.`;
       note.className = "small muted";
     }
   };
@@ -1573,7 +1573,7 @@ $("#settingsBtn").onclick = () => {
         <button id="sCatAdd" class="ghost small" type="button">+ Add category</button></div>
       <div class="fRow"><label>Interrupt quick-timers (one per line)</label><textarea id="sInt" rows="4">${esc((s.interrupts||[]).join("\n"))}</textarea></div>
       <div class="fRow"><label>Forgot to hit Start?</label>
-        <label class="small"><input type="checkbox" id="sSyncLastEnd"${s.syncLastTaskEnd!==false?" checked":""}> when I correct a timer's start time, extend the previous task to match</label>
+        <label class="small"><input type="checkbox" id="sSyncLastEnd"${s.syncLastTaskEnd!==false?" checked":""}> when I correct a timer's start time, adjust the previous task to match</label>
         <span class="small muted">Backdating a timer's start (via the running-timer label → edit) moves the previous logged task's end time to line up with it, so there's no unlogged gap between them. Only ever pulls that boundary - it won't touch anything else in the timesheet.</span></div>`)}
     ${sec("Calendar", `
       <div class="fRow"><label>Exchange published calendar ICS URL</label><input id="sIcs" value="${esc(s.icsUrl||"")}" placeholder="https://outlook.office365.com/owa/calendar/.../calendar.ics"></div>
