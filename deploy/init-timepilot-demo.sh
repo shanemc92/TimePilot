@@ -242,6 +242,17 @@ step_clone() {
 }
 run_step "clone TimePilot repo" check_clone step_clone
 
+### 4b. Always pull latest TimePilot code on rerun — .env is gitignored/untracked so this ###
+### never touches secrets; git reset --hard discards any local drift (there shouldn't be any) ###
+### and guarantees the working tree matches origin exactly, same as a fresh clone would give. ###
+check_repo_update() { false; }   # always re-check for updates, cheap no-op if already current
+step_repo_update() {
+    cd /opt/TimePilot
+    git fetch origin
+    git reset --hard origin/HEAD
+}
+run_step "update TimePilot repo to latest" check_repo_update step_repo_update
+
 ### 5. Generate secrets into .env — NEVER regenerate if already set. ###
 ### Rotating TIMEPILOT_MASTER_KEY after data exists makes all existing data unrecoverable. ###
 check_secrets() {
@@ -505,6 +516,12 @@ step_daily_reset() {
 #!/usr/bin/env bash
 set -uo pipefail
 cd /opt/TimePilot
+
+# Pick up any repo changes since last reset (docker-compose.yml, sample_data.py, etc.), and
+# pull the latest published image. Best-effort: a transient network hiccup shouldn't abort
+# the whole nightly reset.
+git fetch origin >/dev/null 2>&1 && git reset --hard origin/HEAD >/dev/null 2>&1
+docker compose pull >/dev/null 2>&1 || true
 
 # Generate a fresh demo password for today and splice it into the login banner.
 # Prefix/suffix are baked in literally at generation time; python (not sed) writes .env so
