@@ -562,10 +562,18 @@ function renderStrip(){
 // extend to meet, since it's the thing that left the gap in the first place.
 function lastTimelogEntryToday(){
   const day = todayISO();
+  // Calendar meetings get auto-imported into the timelog with their real
+  // scheduled end time (see importCalToLog), which can be later today - a
+  // meeting at 15:00 has a numerically bigger end than a task that just
+  // finished at 11:00, but it hasn't happened yet. Only entries that have
+  // actually ended by now are eligible to be "the last thing," or a future
+  // meeting would win purely on clock arithmetic.
+  const nowMin = hmToMin(hmNow());
   let best = null, bestMin = -1;
   S.timelog.forEach(e => {
     if(e.date !== day) return;
     const m = hmToMin(e.end);
+    if(m > nowMin) return;
     if(m > bestMin){ best = e; bestMin = m; }
   });
   return best;
