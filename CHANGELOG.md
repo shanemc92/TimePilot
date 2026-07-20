@@ -312,3 +312,18 @@ chronological order (oldest first).
   it at Redis instead. Confirmed rate limiting still fires (429s / log
   lines) unchanged after the change - only the storage declaration moved
   from implicit to explicit.
+- **BUGFIX:** Meetings only get imported into the timelog when the Export
+  tab has loaded that day (`importCalToLog`) - if that hadn't happened yet,
+  a meeting sitting between a stopped task and "now" simply wasn't in
+  `S.timelog`, so backdating a new timer's start could reach straight past
+  it and adjust an *older* task instead, silently pulling its end into the
+  middle of an unlogged meeting. Fixed by importing today's calendar (same
+  path, same ignore-list, same dedup against manually-deleted entries) the
+  moment the edit-timer popup opens, so the check always sees the real
+  last thing that happened. Also replaced the silent auto-apply with a
+  live preview of exactly which entry (task or meeting) is about to be
+  adjusted and to what, behind a checkbox defaulted to checked - so a
+  wrong pick is visible and skippable per-correction, not just per-import.
+  Reproduced the exact reported scenario (task stopped, unimported meeting
+  in between, new task backdated past it) and confirmed the meeting is now
+  the one adjusted, not the earlier task.

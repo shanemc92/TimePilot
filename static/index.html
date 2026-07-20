@@ -578,7 +578,7 @@ function lastTimelogEntryToday(){
   });
   return best;
 }
-function editTimerModal(){
+async function editTimerModal(){
   const t = S.activeTimer; if(!t) return;
   const st = new Date(t.start);
   const curCat = t.category || ((S.tasks.find(x=>x.id===t.taskId)||{}).category) || defCat();
@@ -586,18 +586,42 @@ function editTimerModal(){
     <div class="fRow"><label>Task name</label><input id="etName" value="${esc(t.label)}"></div>
     <div class="fRow"><label>Category</label><select id="etCat">${allCats().map(c=>`<option value="${c.k}"${curCat===c.k?" selected":""}>${esc(c.label)}</option>`).join("")}</select></div>
     <div class="fRow"><label>Start time (now: running ${fmtDur((Date.now()-st)/60000)})</label><input id="etStart" type="time" value="${pad(st.getHours())}:${pad(st.getMinutes())}">
-      <div id="etSyncNote" class="small muted" style="margin-top:4px"></div></div>
+      <div id="etSyncNote" class="small muted" style="margin-top:4px">Checking today's log…</div>
+      <label id="etSyncRow" class="small" style="display:none;margin-top:6px">
+        <input type="checkbox" id="etSyncConfirm" checked> <span id="etSyncLabel">Also adjust that entry as shown above</span></label></div>
     <div class="mActions"><button class="danger" id="etDiscard">Discard timer</button><button id="mCancel">Cancel</button><button class="primary" id="etSave">Save</button></div>`);
   const oldStartHM = pad(st.getHours())+":"+pad(st.getMinutes());
-  // Live preview of the previous-task sync, recomputed on every keystroke so
-  // it's never a silent no-op - if the guard is going to block it (or the
-  // setting is off, or there's nothing to sync), you see why *before*
-  // clicking Save, not after checking the Export tab and finding nothing changed.
+  setTimeout(()=>$("#etName").focus(), 50);
+  $("#etDiscard").onclick = () => {
+    if(!confirm("Discard the running timer without logging it?")) return;
+    S.activeTimer = null; markDirty(); closeModal(); renderStrip();
+  };
+  $("#mCancel").onclick = closeModal;
+
+  // Meetings only land in S.timelog when the Export tab has imported them
+  // (importCalToLog) - if today's calendar hasn't been opened yet, a
+  // meeting sitting between the stopped task and now simply isn't in
+  // S.timelog, so the sync used to reach straight past it to whatever
+  // OLDER task happened to be there. Importing here first (same path, same
+  // ignore-list, same dedup against deleted entries via S.calSeen the
+  // Export tab uses) means the check always sees the real last thing that
+  // happened, not just whatever the app happened to already know about.
+  // Deliberately not skipped if the modal gets closed before this
+  // resolves - it's a harmless, idempotent sync either way.
+  try { await importCalToLog(todayISO()); } catch(e){ /* no calendar configured, or fetch failed - fine, just means nothing to add */ }
+  if(!$("#etSyncNote")) return;   // modal was closed/replaced while we were awaiting
+
+  // Live preview of the previous-entry sync, recomputed on every keystroke -
+  // and, now, backed by a checkbox defaulted ON rather than applying
+  // silently. You see exactly what's about to change and can uncheck it for
+  // this one correction if it picked the wrong thing (e.g. you were in an
+  // unlogged meeting the app doesn't know the boundaries of).
   const updateSyncNote = () => {
-    const note = $("#etSyncNote"), val = $("#etStart").value;
+    const note = $("#etSyncNote"), row = $("#etSyncRow"), val = $("#etStart").value;
+    row.style.display = "none";
     if(!val || val === oldStartHM){ note.textContent = ""; return; }
     if(S.settings.syncLastTaskEnd === false){
-      note.textContent = "Previous-task syncing is off (Settings → Categories & timers).";
+      note.textContent = "Previous-entry syncing is off (Settings → Categories & timers).";
       note.className = "small muted"; return;
     }
     const last = lastTimelogEntryToday();
@@ -608,11 +632,15 @@ function editTimerModal(){
       note.textContent = `Won't adjust "${last.label}" - that start is before it began (${last.start}).`;
       note.className = "small errText";
     } else {
-      note.textContent = `Will adjust "${last.label}" (currently ends ${last.end}) to ${val}.`;
+      note.textContent = `Last logged: "${last.label}" (${last.source==="cal"?"meeting":"task"}, ${last.start}–${last.end}).`;
       note.className = "small muted";
+      row.style.display = "";
+      $("#etSyncLabel").textContent = `Also move its end to ${val} to match`;
     }
   };
   $("#etStart").addEventListener("input", updateSyncNote);
+  updateSyncNote();
+
   $("#etSave").onclick = () => {
     const name = $("#etName").value.trim(); if(!name){ alert("Task name required."); return; }
     t.label = name; t.category = $("#etCat").value;
@@ -620,27 +648,22 @@ function editTimerModal(){
     const ns = new Date(st); ns.setHours(h, m, 0, 0);
     if(ns > new Date()){ alert("Start time can't be in the future."); return; }
     const newStartHM = pad(h)+":"+pad(m);
-    if(S.settings.syncLastTaskEnd !== false && newStartHM !== oldStartHM){
+    if(S.settings.syncLastTaskEnd !== false && newStartHM !== oldStartHM
+       && $("#etSyncRow").style.display !== "none" && $("#etSyncConfirm").checked){
       const last = lastTimelogEntryToday();
       if(last && last.end !== newStartHM){
         const mins = hmToMin(newStartHM) - hmToMin(last.start);
         // Only pull the boundary - never push it past the previous entry's
         // OWN start (that would invert or zero out its duration). If the new
         // start lands earlier than that, leave the previous entry alone
-        // rather than silently corrupting its logged time. (The live note
-        // above already told you this was going to happen.)
+        // rather than silently corrupting its logged time. (The note above
+        // and the now-hidden checkbox already reflect this.)
         if(mins >= 1){ last.end = newStartHM; last.minutes = mins; }
       }
     }
     t.start = ns.toISOString();
     markDirty(); closeModal(); renderStrip(); if(view==="export") renderExport();
   };
-  $("#etDiscard").onclick = () => {
-    if(!confirm("Discard the running timer without logging it?")) return;
-    S.activeTimer = null; markDirty(); closeModal(); renderStrip();
-  };
-  $("#mCancel").onclick = closeModal;
-  setTimeout(()=>$("#etName").focus(), 50);
 }
 $("#timerInfo").onclick = () => { if(S.activeTimer) editTimerModal(); };
 function interruptModal(name){
