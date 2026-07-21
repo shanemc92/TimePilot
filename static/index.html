@@ -472,6 +472,19 @@ async function loadState(){
   const r = await fetch("/api/state");
   if(r.status === 401 || r.redirected){ location.href = "/login"; return; }
   S = await r.json(); dailyCleanup(); applySettings(); renderAll();
+  // Warm today's calendar in the background rather than waiting for
+  // whichever tab happens to trigger the first fetch of the day (often
+  // Export). The server caches raw ICS bytes for 5 minutes (CACHE_TTL in
+  // app.py) but still re-parses/re-expands recurring events on every call,
+  // so a cold cache means a real network round-trip to the ICS URL - that
+  // wait just gets moved here, off the critical path, instead of landing
+  // on whichever click triggers it. importCalToLog also materializes
+  // today's meetings into S.timelog, so a later renderExport()'s own
+  // (idempotent, dedup'd via S.calSeen) call finds nothing new to import.
+  // Deliberately not awaited - initial render above shouldn't wait on it,
+  // and a failure here (no calendar configured, fetch error) is silently
+  // fine since every real call site already handles that itself.
+  importCalToLog(todayISO()).catch(()=>{});
 }
 function markDirty(){
   dirty = true; $("#saveDot").classList.add("dirty");

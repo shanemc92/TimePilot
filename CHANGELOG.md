@@ -327,3 +327,11 @@ chronological order (oldest first).
   Reproduced the exact reported scenario (task stopped, unimported meeting
   in between, new task backdated past it) and confirmed the meeting is now
   the one adjusted, not the earlier task.
+- **FEATURE:** The first calendar check of the day (previously whichever
+  tab happened to trigger it - often Export) meant waiting on a real
+  network round-trip to the ICS URL if the server's 5-minute raw-bytes
+  cache had gone cold. Now warmed in the background right after login/page
+  load instead, off the critical path of any particular tab - by the time
+  Export (or the edit-timer popup's own calendar check) runs, the fetch is
+  already done and today's meetings are already imported, so both find
+  nothing left to wait on.
