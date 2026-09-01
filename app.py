@@ -323,6 +323,10 @@ def create_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), camera=(), microphone=(), payment=()"
+        )
         # 'unsafe-inline' is required: index.html and the auth templates are
         # single-file pages with inline <script>/<style>. The CSP still locks
         # out every external source, framing, plugins and form hijacking.
