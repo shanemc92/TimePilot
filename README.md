@@ -30,6 +30,11 @@ See [CHANGELOG.md](CHANGELOG.md) for what's changed release to release.
 - **Notes, Snippets & Clipboard** - free-form note sections (reorderable,
   click a note to copy it), a searchable code-snippet library, and a
   Markdown-aware clipboard library for reusable text/templates.
+- **Scratchpad** - a plain-text scratch tab for quick copy/paste: line
+  numbers, adjustable text size, word wrap, live line/word/char counts,
+  find & replace (with regex and capture groups), and one-click transforms
+  (remove blank lines, dedupe, sort, trim trailing space, case). Autosaves
+  with everything else.
 - **Notifications (ntfy)** - schedule one-off or recurring push reminders to
   your phone via [ntfy](https://ntfy.sh) (ntfy.sh or your own server). Sent
   by the server, so they arrive whether or not the app is open. Task and

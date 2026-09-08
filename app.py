@@ -46,6 +46,7 @@ JSON_DOMAINS = {
     "notes": ["notes"],
     "snippets": ["snippets"],
     "clipboard": ["pastes"],
+    "scratch": ["scratch"],
     "reminders": ["reminders"],
     "runtime": ["activeTimer", "calSeen"],
 }
@@ -92,6 +93,7 @@ KEY_DEFAULTS = {
     ],
     "snippets": [],
     "pastes": [],
+    "scratch": {"text": "", "size": 13, "wrap": True, "nums": True},
     "reminders": [],
     "activeTimer": None,
     "calSeen": {},
@@ -256,6 +258,7 @@ _ics_session.mount("https://", _ValidatingHTTPAdapter())
 STATE_SHAPE = {
     "settings": dict, "tasks": list, "timelog": list, "notes": list,
     "snippets": list, "pastes": list, "reminders": list, "calSeen": dict,
+    "scratch": dict,
 }
 
 

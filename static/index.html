@@ -271,6 +271,29 @@ pre#exportText{background:var(--surface2);border:1px solid var(--line);border-ra
 .libBar > [data-search]{flex:0 1 200px;min-width:120px;margin-left:auto}
 .libBar .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+/* ---- scratchpad ---- */
+.scrPanel{display:flex;flex-direction:column;gap:8px}
+.scrTools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.scrTools button{padding:4px 9px;font-size:12px}
+.scrTools button.on{border-color:var(--accent);color:var(--accent)}
+.scrTools input{flex:0 1 170px;min-width:110px;font-size:13px;padding:4px 7px}
+.scrTools label{display:flex;align-items:center;gap:4px;cursor:pointer}
+.scrTools label input{flex:none;min-width:0}
+#scrEditor{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;overflow:hidden;
+  height:calc(100vh - 330px);min-height:260px}
+#scratchGutter,#scratchTA{font-family:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+  font-size:13px;line-height:1.5}
+#scratchGutter{flex:none;overflow:hidden;text-align:right;padding:8px 6px;background:var(--surface2);
+  color:var(--muted);border-right:1px solid var(--line);user-select:none;white-space:pre}
+#scratchTA{flex:1;min-width:0;resize:none;border:none;border-radius:0;background:transparent;padding:8px 10px;
+  white-space:pre-wrap;overflow-wrap:break-word;tab-size:4}
+#scratchTA:focus{outline:none}
+/* off-screen twin of the textarea's text box - used to measure how tall each
+   logical line renders (a wrapped line is several rows) so the gutter numbers
+   line up with what's on screen */
+#scratchMirror{position:absolute;visibility:hidden;top:-9999px;left:0;padding:0;border:0;
+  white-space:pre-wrap;overflow-wrap:break-word}
+
 /* ---- modal ---- */
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:60;padding:14px}
 #modal.open{display:flex}
@@ -306,6 +329,7 @@ pre#exportText{background:var(--surface2);border:1px solid var(--line);border-ra
   <button class="tab" data-view="notes">Notes</button>
   <button class="tab" data-view="snips">Snippets</button>
   <button class="tab" data-view="paste">Clipboard</button>
+  <button class="tab" data-view="scratch">Scratch</button>
   <button class="tab" data-view="notif">Notifications</button>
   <button class="tab" data-view="export">Export</button>
   <span class="spacer"></span>
@@ -344,6 +368,49 @@ pre#exportText{background:var(--surface2);border:1px solid var(--line);border-ra
 
   <section id="view-snips" style="display:none"></section>
   <section id="view-paste" style="display:none"></section>
+
+  <section id="view-scratch" style="display:none">
+    <div class="panel scrPanel">
+      <div class="scrTools">
+        <button id="scrMinus" title="Smaller text">A-</button>
+        <span class="small muted" id="scrSize"></span>
+        <button id="scrPlus" title="Larger text">A+</button>
+        <button id="scrWrap" title="Toggle word wrap">Wrap</button>
+        <button id="scrNums" title="Toggle line numbers">Line numbers</button>
+        <span style="margin-left:auto"></span>
+        <button id="scrCopy">Copy all</button>
+        <button id="scrDl">Download</button>
+        <button id="scrClear" class="danger">Clear</button>
+      </div>
+      <div class="scrTools">
+        <input id="scrFind" placeholder="Find...">
+        <input id="scrRepl" placeholder="Replace with...">
+        <label class="small muted" title="Match case"><input type="checkbox" id="scrCase"> Case</label>
+        <label class="small muted" title="Treat the find box as a regular expression ($1 works in the replacement)"><input type="checkbox" id="scrRegex"> Regex</label>
+        <button id="scrNext">Find next</button>
+        <button id="scrRep">Replace</button>
+        <button id="scrRepAll">Replace all</button>
+        <span class="small muted" id="scrCount"></span>
+      </div>
+      <div class="scrTools">
+        <span class="small muted">Transform (selection, or all):</span>
+        <button data-tf="blanks">Remove blank lines</button>
+        <button data-tf="trail">Trim trailing space</button>
+        <button data-tf="dedupe">Remove duplicates</button>
+        <button data-tf="sortA">Sort A-Z</button>
+        <button data-tf="sortZ">Sort Z-A</button>
+        <button data-tf="rev">Reverse</button>
+        <button data-tf="upper">UPPER</button>
+        <button data-tf="lower">lower</button>
+      </div>
+      <div id="scrEditor">
+        <div id="scratchGutter"></div>
+        <textarea id="scratchTA" spellcheck="false" placeholder="Scratch space - autosaves as you type."></textarea>
+      </div>
+      <div class="small muted" id="scrStatus"></div>
+      <div id="scratchMirror" aria-hidden="true"></div>
+    </div>
+  </section>
 
   <section id="view-notif" style="display:none">
     <div id="notifWrap">
@@ -1170,6 +1237,190 @@ function libModal(kind, it){
   setTimeout(()=>$("#mTitle").focus(), 50);
 }
 
+/* ================= scratchpad ================= */
+const SCR_DEF = {text:"", size:13, wrap:true, nums:true};
+const SCR_TF = {
+  blanks: t => t.split("\n").filter(l => l.trim() !== "").join("\n"),
+  trail:  t => t.split("\n").map(l => l.replace(/[ \t]+$/,"")).join("\n"),
+  dedupe: t => { const seen = new Set();
+    return t.split("\n").filter(l => seen.has(l) ? false : (seen.add(l), true)).join("\n"); },
+  sortA:  t => t.split("\n").sort((a,b) => a.localeCompare(b)).join("\n"),
+  sortZ:  t => t.split("\n").sort((a,b) => b.localeCompare(a)).join("\n"),
+  rev:    t => t.split("\n").reverse().join("\n"),
+  upper:  t => t.toUpperCase(),
+  lower:  t => t.toLowerCase(),
+};
+let scrWired = false, scrGutT = null;
+
+function scrCfg(){
+  if(!S.scratch || typeof S.scratch !== "object") S.scratch = {...SCR_DEF};
+  for(const k in SCR_DEF) if(S.scratch[k] === undefined) S.scratch[k] = SCR_DEF[k];
+  return S.scratch;
+}
+function renderScratch(){
+  const c = scrCfg(), ta = $("#scratchTA");
+  if(!scrWired){ wireScratch(); scrWired = true; }
+  // The markup is static (not rebuilt per render) so the textarea keeps its
+  // native undo history and cursor position across tab switches.
+  if(ta.value !== c.text) ta.value = c.text;
+  applyScratchStyle();
+}
+function applyScratchStyle(){
+  const c = scrCfg(), ta = $("#scratchTA"), g = $("#scratchGutter");
+  ta.style.fontSize = g.style.fontSize = c.size + "px";
+  ta.style.whiteSpace = c.wrap ? "pre-wrap" : "pre";
+  ta.style.overflowX = c.wrap ? "hidden" : "auto";
+  g.style.display = c.nums ? "" : "none";
+  $("#scrSize").textContent = c.size + "px";
+  $("#scrWrap").classList.toggle("on", c.wrap);
+  $("#scrNums").classList.toggle("on", c.nums);
+  buildGutter(); scrStatus(); scrCount();
+}
+function buildGutter(){
+  const c = scrCfg(); if(!c.nums) return;
+  const ta = $("#scratchTA"), g = $("#scratchGutter"), m = $("#scratchMirror");
+  const cs = getComputedStyle(ta), lines = ta.value.split("\n");
+  g.style.paddingTop = cs.paddingTop;
+  g.style.lineHeight = cs.lineHeight;
+  if(!c.wrap || lines.length > 2000){
+    // no wrapping (or too many lines to be worth measuring): every logical
+    // line is exactly one row, so uniform line-height already lines up
+    g.innerHTML = lines.map((_, i) => `<div>${i+1}</div>`).join("");
+  } else {
+    m.style.font = cs.font;
+    m.style.lineHeight = cs.lineHeight;
+    m.style.width = (ta.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + "px";
+    m.innerHTML = lines.map(l => `<div>${esc(l) || "&nbsp;"}</div>`).join("");
+    g.innerHTML = [...m.children]
+      .map((d, i) => `<div style="height:${d.offsetHeight}px">${i+1}</div>`).join("");
+  }
+  g.scrollTop = ta.scrollTop;
+}
+function scrStatus(){
+  const ta = $("#scratchTA"), v = ta.value, pos = ta.selectionStart;
+  const before = v.slice(0, pos), sel = ta.selectionEnd - ta.selectionStart;
+  const parts = [
+    `Ln ${before.split("\n").length}, Col ${pos - before.lastIndexOf("\n")}`,
+    `Lines ${v ? v.split("\n").length : 0}`,
+    `Words ${(v.match(/\S+/g) || []).length}`,
+    `Chars ${v.length}`,
+  ];
+  if(sel) parts.push(`Sel ${sel}`);
+  $("#scrStatus").textContent = parts.join("  -  ");
+}
+function scrChanged(){
+  scrCfg().text = $("#scratchTA").value; markDirty();
+  clearTimeout(scrGutT); scrGutT = setTimeout(buildGutter, 60);
+  scrStatus(); scrCount();
+}
+// Writes through execCommand where possible so each edit lands on the
+// textarea's own undo stack - Ctrl+Z still walks back through transforms
+// and replacements, not just typing.
+function scrInsert(text){
+  const ta = $("#scratchTA"); ta.focus();
+  let ok = false;
+  if(text !== ""){ try { ok = document.execCommand("insertText", false, text); } catch(e){} }
+  if(!ok) ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, "end");
+  scrChanged();
+}
+function scrSetAll(text){
+  const ta = $("#scratchTA");
+  ta.focus(); ta.setSelectionRange(0, ta.value.length);
+  scrInsert(text);
+}
+function scrRe(){
+  const q = $("#scrFind").value; if(!q) return null;
+  const src = $("#scrRegex").checked ? q : q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  try { return new RegExp(src, "gm" + ($("#scrCase").checked ? "" : "i")); }
+  catch(e){ return "err"; }
+}
+function scrCount(){
+  const el = $("#scrCount"), re = scrRe();
+  el.classList.toggle("errText", re === "err");
+  if(re === "err"){ el.textContent = "bad regex"; return; }
+  if(!re){ el.textContent = ""; return; }
+  const n = ($("#scratchTA").value.match(re) || []).length;
+  el.textContent = n === 1 ? "1 match" : n + " matches";
+}
+function scrFindNext(){
+  const re = scrRe(); if(!re || re === "err") return null;
+  const ta = $("#scratchTA");
+  re.lastIndex = ta.selectionEnd;
+  let m = re.exec(ta.value);
+  if(!m){ re.lastIndex = 0; m = re.exec(ta.value); }   // wrap around
+  if(!m || m[0] === "") return null;                   // ignore zero-length matches
+  ta.focus(); ta.setSelectionRange(m.index, m.index + m[0].length);
+  scrStatus(); return m;
+}
+function scrReplace(){
+  const ta = $("#scratchTA"), re = scrRe(); if(!re || re === "err") return;
+  const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+  const one = new RegExp(re.source, re.flags.replace("g", ""));
+  // only replace when the current selection IS the match - otherwise this
+  // press just finds the first hit
+  if(sel){
+    const m = one.exec(sel);
+    if(m && m[0] === sel) scrInsert(sel.replace(one, $("#scrRepl").value));
+  }
+  scrFindNext();
+}
+function scrReplaceAll(){
+  const ta = $("#scratchTA"), re = scrRe(); if(!re || re === "err") return;
+  const n = (ta.value.match(re) || []).length;
+  if(!n) return;
+  scrSetAll(ta.value.replace(re, $("#scrRepl").value));
+  $("#scrCount").textContent = n === 1 ? "1 replaced" : n + " replaced";
+}
+function scrTransform(key){
+  const fn = SCR_TF[key], ta = $("#scratchTA");
+  const a = ta.selectionStart, b = ta.selectionEnd;
+  if(b > a){ ta.focus(); ta.setSelectionRange(a, b); scrInsert(fn(ta.value.slice(a, b))); }
+  else scrSetAll(fn(ta.value));
+}
+function wireScratch(){
+  const ta = $("#scratchTA"), g = $("#scratchGutter");
+  ta.oninput = scrChanged;
+  ta.onscroll = () => { g.scrollTop = ta.scrollTop; };
+  ta.onclick = ta.onkeyup = scrStatus;
+  ta.onkeydown = e => {
+    if(e.key === "Tab" && !e.shiftKey){ e.preventDefault(); scrInsert("\t"); }
+    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f"){ e.preventDefault(); $("#scrFind").select(); }
+  };
+  const bump = d => () => {
+    const c = scrCfg();
+    c.size = Math.min(28, Math.max(10, c.size + d));
+    markDirty(); applyScratchStyle();
+  };
+  $("#scrMinus").onclick = bump(-1);
+  $("#scrPlus").onclick = bump(1);
+  $("#scrWrap").onclick = () => { const c = scrCfg(); c.wrap = !c.wrap; markDirty(); applyScratchStyle(); };
+  $("#scrNums").onclick = () => { const c = scrCfg(); c.nums = !c.nums; markDirty(); applyScratchStyle(); };
+  $("#scrCopy").onclick = async () => {
+    try { await navigator.clipboard.writeText(ta.value); $("#scrCopy").textContent = "Copied";
+      setTimeout(() => { $("#scrCopy").textContent = "Copy all"; }, 1200); } catch(e){}
+  };
+  $("#scrDl").onclick = () => {
+    const url = URL.createObjectURL(new Blob([ta.value], {type:"text/plain"}));
+    const a = document.createElement("a");
+    a.href = url; a.download = "scratch-" + todayISO() + ".txt"; a.click();
+    URL.revokeObjectURL(url);
+  };
+  $("#scrClear").onclick = () => {
+    if(ta.value && !confirm("Clear the scratchpad?")) return;
+    scrSetAll("");
+  };
+  $("#scrFind").oninput = scrCount;
+  $("#scrFind").onkeydown = e => { if(e.key === "Enter"){ e.preventDefault(); scrFindNext(); } };
+  $("#scrRepl").onkeydown = e => { if(e.key === "Enter"){ e.preventDefault(); scrReplace(); } };
+  $("#scrCase").onchange = $("#scrRegex").onchange = scrCount;
+  $("#scrNext").onclick = scrFindNext;
+  $("#scrRep").onclick = scrReplace;
+  $("#scrRepAll").onclick = scrReplaceAll;
+  document.querySelectorAll("#view-scratch [data-tf]").forEach(b => {
+    b.onclick = () => scrTransform(b.dataset.tf);
+  });
+}
+
 /* ================= export ================= */
 async function importCalToLog(d){
   S.calSeen = S.calSeen || {};
@@ -1634,7 +1885,7 @@ $("#settingsBtn").onclick = () => {
           </label>
           <span class="small muted" id="sImportStatus"></span>
         </div>
-        <span class="small muted">Export downloads a JSON file with all your tasks, notes, snippets, clipboard items, reminders, and settings. Import <strong>replaces</strong> everything currently in your account with the contents of a previously exported file.</span></div>`)}
+        <span class="small muted">Export downloads a JSON file with all your tasks, notes, snippets, clipboard items, scratchpad, reminders, and settings. Import <strong>replaces</strong> everything currently in your account with the contents of a previously exported file.</span></div>`)}
     </div>
     <div class="mActions"><button id="mCancel">Cancel</button><button class="primary" id="mSave">Save</button></div>`);
   $("#modalBox").classList.add("settings");
@@ -1793,11 +2044,12 @@ document.querySelectorAll("nav .tab").forEach(b=>{
 function setView(v){
   view = v;
   document.querySelectorAll("nav .tab").forEach(b=>b.classList.toggle("on", b.dataset.view===v));
-  ["board","today","notes","snips","paste","notif","export"].forEach(x=>$("#view-"+x).style.display = x===v? "":"none");
+  ["board","today","notes","snips","paste","scratch","notif","export"].forEach(x=>$("#view-"+x).style.display = x===v? "":"none");
   if(v==="board") renderBoard();
   if(v==="today") renderToday();
   if(v==="notes") renderNotes();
   if(v==="snips"||v==="paste") renderLib(v);
+  if(v==="scratch") renderScratch();
   if(v==="notif"){ remFormReset(); loadReminders().then(renderNotif); }
   if(v==="export") renderExport();
 }

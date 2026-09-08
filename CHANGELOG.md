@@ -335,3 +335,24 @@ chronological order (oldest first).
   Export (or the edit-timer popup's own calendar check) runs, the fetch is
   already done and today's meetings are already imported, so both find
   nothing left to wait on.
+
+## Scratchpad
+
+- **FEATURE:** Added a **Scratch** tab - a single plain-text scratchpad for
+  temporary copy/paste, replacing the habit of opening Notepad++ for it.
+  Text size +/-, word wrap and line numbers toggle (numbers are measured
+  per rendered row, so they stay aligned with wrapped lines), a live
+  Ln/Col, lines, words, chars and selection status bar, find & replace with
+  match-case and regex options (capture groups work in the replacement,
+  search wraps around, live match count), and transforms that apply to the
+  selection or the whole document: remove blank lines, trim trailing
+  space, remove duplicate lines, sort A-Z / Z-A, reverse, UPPER, lower.
+  Plus copy all, download as .txt, and clear.
+- **FEATURE:** Edits are written through `execCommand("insertText")` where
+  available so replacements and transforms land on the textarea's own undo
+  stack - Ctrl+Z walks back through them, not just typing.
+- **FEATURE:** Content and view options persist in a new encrypted
+  `scratch` data domain (`{text, size, wrap, nums}`), autosaving on the
+  same debounce as the rest of the app and included in backup export and
+  import.
+
