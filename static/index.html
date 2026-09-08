@@ -89,9 +89,24 @@ h1{font-size:17px;letter-spacing:.04em}
 nav{display:flex;gap:4px;padding:8px 14px;border-bottom:1px solid var(--line);align-items:center;flex-wrap:wrap;background:var(--bg)}
 nav .tab{background:transparent;border:none;padding:7px 12px;border-radius:7px;color:var(--muted);font-size:14px}
 nav .tab.on{background:var(--surface2);color:var(--text);font-weight:600}
+nav .tab.pinned{box-shadow:inset 2px 0 0 var(--accent)}
 nav .spacer{margin-left:auto}
+#splitBtn.on{color:var(--accent);border-color:var(--accent)}
 
 main{padding:14px;max-width:1400px;margin:0 auto}
+/* ---- split view: two tabs side by side ----
+   The view sections are already direct children of <main>, so splitting is
+   just a flex row - no DOM moving, which keeps each view's own state (the
+   scratchpad's undo stack, scroll positions) intact. */
+main.split{display:flex;gap:var(--gap);align-items:flex-start;max-width:1900px}
+main.split > section{flex:1 1 0;min-width:0}
+/* Half a phone screen is no use to anyone: below this the pinned pane is
+   dropped and only the active tab shows. !important beats the inline
+   display the view switcher sets. */
+@media(max-width:900px){
+  main.split{display:block;max-width:1400px}
+  main.split > section.paneL{display:none!important}
+}
 
 /* ---- board ---- */
 #board{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:var(--gap);align-items:start}
@@ -279,8 +294,14 @@ pre#exportText{background:var(--surface2);border:1px solid var(--line);border-ra
 .scrTools input{flex:0 1 170px;min-width:110px;font-size:13px;padding:4px 7px}
 .scrTools label{display:flex;align-items:center;gap:4px;cursor:pointer}
 .scrTools label input{flex:none;min-width:0}
+#scrTabs{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.scrTab{display:flex;align-items:center;gap:7px;padding:4px 9px;font-size:12px;color:var(--muted)}
+.scrTab.on{color:var(--text);border-color:var(--accent);font-weight:600}
+.scrTab .x{font-size:10px;padding:0 2px;border-radius:4px;opacity:.6}
+.scrTab .x:hover{opacity:1;color:var(--danger)}
+input.scrRename{font-size:12px;padding:1px 4px;width:120px;min-width:0}
 #scrEditor{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;overflow:hidden;
-  height:calc(100vh - 330px);min-height:260px}
+  height:calc(100vh - 370px);min-height:240px}
 #scratchGutter,#scratchTA{font-family:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
   font-size:13px;line-height:1.5}
 #scratchGutter{flex:none;overflow:hidden;text-align:right;padding:8px 6px;background:var(--surface2);
@@ -333,6 +354,7 @@ pre#exportText{background:var(--surface2);border:1px solid var(--line);border-ra
   <button class="tab" data-view="notif">Notifications</button>
   <button class="tab" data-view="export">Export</button>
   <span class="spacer"></span>
+  <button id="splitBtn" class="ghost" title="Pin this tab to the left half of the screen">&#9707; Split</button>
   <button id="settingsBtn" class="ghost">⚙ Settings</button>
   <button id="logoutBtn" class="ghost" title="Log out">⎋</button>
 </nav>
@@ -371,6 +393,7 @@ pre#exportText{background:var(--surface2);border:1px solid var(--line);border-ra
 
   <section id="view-scratch" style="display:none">
     <div class="panel scrPanel">
+      <div id="scrTabs"></div>
       <div class="scrTools">
         <button id="scrMinus" title="Smaller text">A-</button>
         <span class="small muted" id="scrSize"></span>
@@ -1238,7 +1261,8 @@ function libModal(kind, it){
 }
 
 /* ================= scratchpad ================= */
-const SCR_DEF = {text:"", size:13, wrap:true, nums:true};
+const SCR_DEF = {size:13, wrap:true, nums:true};
+const SCR_MAX = 8;
 const SCR_TF = {
   blanks: t => t.split("\n").filter(l => l.trim() !== "").join("\n"),
   trail:  t => t.split("\n").map(l => l.replace(/[ \t]+$/,"")).join("\n"),
@@ -1253,17 +1277,87 @@ const SCR_TF = {
 let scrWired = false, scrGutT = null;
 
 function scrCfg(){
-  if(!S.scratch || typeof S.scratch !== "object") S.scratch = {...SCR_DEF};
-  for(const k in SCR_DEF) if(S.scratch[k] === undefined) S.scratch[k] = SCR_DEF[k];
-  return S.scratch;
+  const c = (S.scratch && typeof S.scratch === "object") ? S.scratch : (S.scratch = {});
+  for(const k in SCR_DEF) if(c[k] === undefined) c[k] = SCR_DEF[k];
+  if(!Array.isArray(c.pads) || !c.pads.length){
+    // seeds the first pad, and carries over the single-pad shape this used
+    // to have ({text:...}) for anyone upgrading
+    c.pads = [{id:uid(), name:"Note 1", text: typeof c.text === "string" ? c.text : ""}];
+  }
+  delete c.text;
+  c.pads = c.pads.filter(p => p && typeof p === "object").slice(0, SCR_MAX);
+  c.pads.forEach(p => {
+    if(!p.id) p.id = uid();
+    if(typeof p.name !== "string" || !p.name.trim()) p.name = "Note";
+    if(typeof p.text !== "string") p.text = "";
+  });
+  if(!c.pads.some(p => p.id === c.active)) c.active = c.pads[0].id;
+  return c;
 }
+const scrPad = () => { const c = scrCfg(); return c.pads.find(p => p.id === c.active); };
+
 function renderScratch(){
-  const c = scrCfg(), ta = $("#scratchTA");
+  const ta = $("#scratchTA");
   if(!scrWired){ wireScratch(); scrWired = true; }
-  // The markup is static (not rebuilt per render) so the textarea keeps its
-  // native undo history and cursor position across tab switches.
-  if(ta.value !== c.text) ta.value = c.text;
+  renderScrTabs();
+  // The editor markup is static (not rebuilt per render) so the textarea
+  // keeps its cursor position across app tab switches. Switching scratch
+  // pads does reset the browser's undo stack for it - one textarea, one
+  // history - so undo doesn't reach back past a pad switch.
+  const pad = scrPad();
+  if(ta.value !== pad.text) ta.value = pad.text;
   applyScratchStyle();
+}
+function renderScrTabs(){
+  const c = scrCfg(), strip = $("#scrTabs");
+  strip.innerHTML = "";
+  c.pads.forEach(p => {
+    const b = document.createElement("button");
+    b.className = "scrTab" + (p.id === c.active ? " on" : "");
+    b.title = "Double-click to rename";
+    b.innerHTML = `<span class="nm">${esc(p.name)}</span>` +
+      (c.pads.length > 1 ? `<span class="x" title="Close">&#10005;</span>` : "");
+    b.onclick = e => {
+      if(e.target.classList.contains("x")){ scrClosePad(p.id); return; }
+      if(p.id !== c.active){ c.active = p.id; markDirty(); renderScratch(); $("#scratchTA").focus(); }
+    };
+    b.ondblclick = e => { if(!e.target.classList.contains("x")) scrRenamePad(b, p); };
+    strip.appendChild(b);
+  });
+  if(c.pads.length < SCR_MAX){
+    const add = document.createElement("button");
+    add.className = "scrTab"; add.textContent = "+"; add.title = "New note";
+    add.onclick = () => {
+      const p = {id:uid(), name:"Note " + (c.pads.length + 1), text:""};
+      c.pads.push(p); c.active = p.id; markDirty(); renderScratch(); $("#scratchTA").focus();
+    };
+    strip.appendChild(add);
+  }
+}
+function scrRenamePad(btn, p){
+  const inp = document.createElement("input");
+  inp.className = "scrRename"; inp.value = p.name; inp.maxLength = 30;
+  btn.innerHTML = ""; btn.appendChild(inp); inp.focus(); inp.select();
+  const done = commit => {
+    inp.onblur = null;
+    const v = inp.value.trim();
+    if(commit && v){ p.name = v; markDirty(); }
+    renderScrTabs();
+  };
+  inp.onblur = () => done(true);
+  inp.onkeydown = e => {
+    e.stopPropagation();
+    if(e.key === "Enter"){ e.preventDefault(); done(true); }
+    if(e.key === "Escape"){ e.preventDefault(); done(false); }
+  };
+}
+function scrClosePad(id){
+  const c = scrCfg(), p = c.pads.find(x => x.id === id);
+  if(!p || c.pads.length < 2) return;               // always keep one pad
+  if(p.text.trim() && !confirm(`Close "${p.name}"? Everything in it is deleted.`)) return;
+  c.pads = c.pads.filter(x => x.id !== id);
+  if(c.active === id) c.active = c.pads[0].id;
+  markDirty(); renderScratch();
 }
 function applyScratchStyle(){
   const c = scrCfg(), ta = $("#scratchTA"), g = $("#scratchGutter");
@@ -1309,7 +1403,7 @@ function scrStatus(){
   $("#scrStatus").textContent = parts.join("  -  ");
 }
 function scrChanged(){
-  scrCfg().text = $("#scratchTA").value; markDirty();
+  scrPad().text = $("#scratchTA").value; markDirty();
   clearTimeout(scrGutT); scrGutT = setTimeout(buildGutter, 60);
   scrStatus(); scrCount();
 }
@@ -1402,11 +1496,12 @@ function wireScratch(){
   $("#scrDl").onclick = () => {
     const url = URL.createObjectURL(new Blob([ta.value], {type:"text/plain"}));
     const a = document.createElement("a");
-    a.href = url; a.download = "scratch-" + todayISO() + ".txt"; a.click();
+    const name = (scrPad().name || "scratch").replace(/[^\w.-]+/g, "_");
+    a.href = url; a.download = name + "-" + todayISO() + ".txt"; a.click();
     URL.revokeObjectURL(url);
   };
   $("#scrClear").onclick = () => {
-    if(ta.value && !confirm("Clear the scratchpad?")) return;
+    if(ta.value && !confirm(`Clear "${scrPad().name}"?`)) return;
     scrSetAll("");
   };
   $("#scrFind").oninput = scrCount;
@@ -2041,10 +2136,36 @@ $("#modal").onclick = e => { if(e.target.id==="modal") closeModal(); };
 document.querySelectorAll("nav .tab").forEach(b=>{
   b.onclick = () => setView(b.dataset.view);
 });
+const VIEWS = ["board","today","notes","snips","paste","scratch","notif","export"];
+let prevView = "today";
+// The pinned (left-hand) view, or null when not split.
+function pinnedView(){
+  const p = S.settings.pinView;
+  return (p && VIEWS.includes(p) && p !== view) ? p : null;
+}
 function setView(v){
+  if(!VIEWS.includes(v)) return;
+  // Clicking the pinned tab swaps the two panes rather than doing nothing.
+  if(v === pinnedView()){ S.settings.pinView = view; markDirty(); }
+  if(v !== view) prevView = view;
   view = v;
-  document.querySelectorAll("nav .tab").forEach(b=>b.classList.toggle("on", b.dataset.view===v));
-  ["board","today","notes","snips","paste","scratch","notif","export"].forEach(x=>$("#view-"+x).style.display = x===v? "":"none");
+  const pin = pinnedView();
+  document.querySelector("main").classList.toggle("split", !!pin);
+  document.querySelectorAll("nav .tab").forEach(b=>{
+    b.classList.toggle("on", b.dataset.view===v);
+    b.classList.toggle("pinned", b.dataset.view===pin);
+  });
+  VIEWS.forEach(x=>{
+    const el = $("#view-"+x), shown = x===v || x===pin;
+    el.style.display = shown ? "" : "none";
+    el.style.order = x===pin ? 0 : 1;      // pinned view sits on the left
+    el.classList.toggle("paneL", x===pin);
+  });
+  renderView(v);
+  if(pin) renderView(pin);
+  updateSplitBtn();
+}
+function renderView(v){
   if(v==="board") renderBoard();
   if(v==="today") renderToday();
   if(v==="notes") renderNotes();
@@ -2053,6 +2174,25 @@ function setView(v){
   if(v==="notif"){ remFormReset(); loadReminders().then(renderNotif); }
   if(v==="export") renderExport();
 }
+function tabLabel(v){
+  const b = document.querySelector(`nav .tab[data-view="${v}"]`);
+  return b ? b.textContent : v;
+}
+function updateSplitBtn(){
+  const pin = pinnedView(), b = $("#splitBtn");
+  b.classList.toggle("on", !!pin);
+  b.innerHTML = pin ? `&#9707; ${esc(tabLabel(pin))} &#10005;` : "&#9707; Split";
+  b.title = pin ? "Unpin - back to one tab at a time"
+                : "Pin this tab to the left half of the screen";
+}
+$("#splitBtn").onclick = () => {
+  if(pinnedView()){ S.settings.pinView = ""; markDirty(); setView(view); return; }
+  // Pin what's on screen now, and put the tab you were on last (or the first
+  // other one) in the right-hand pane.
+  S.settings.pinView = view;
+  markDirty();
+  setView(prevView !== view ? prevView : VIEWS.find(x=>x!==view));
+};
 function renderAll(){ renderStrip(); setView(view); }
 
 /* ================= slotted-task reminders ================= */

@@ -55,6 +55,7 @@ CALENDAR_DOMAIN = "calendar_ics"
 DEFAULT_SETTINGS = {
     "icsUrl": "",
     "theme": "dark",
+    "pinView": "",
     "font": "sans",
     "dayStart": "09:00",
     "dayEnd": "17:00",
@@ -93,7 +94,8 @@ KEY_DEFAULTS = {
     ],
     "snippets": [],
     "pastes": [],
-    "scratch": {"text": "", "size": 13, "wrap": True, "nums": True},
+    "scratch": {"pads": [{"id": "p1", "name": "Note 1", "text": ""}],
+                "active": "p1", "size": 13, "wrap": True, "nums": True},
     "reminders": [],
     "activeTimer": None,
     "calSeen": {},

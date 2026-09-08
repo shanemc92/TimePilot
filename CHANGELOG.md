@@ -356,3 +356,32 @@ chronological order (oldest first).
   same debounce as the rest of the app and included in backup export and
   import.
 
+## Split view
+
+- **FEATURE:** Added a **Split** button: pins the current tab to the left
+  half of the screen while the tab bar keeps switching the right half, so
+  Board or Today can stay visible next to Scratch, Snippets or Clipboard.
+  Clicking the pinned tab swaps the two panes; the button unpins. The
+  pinned tab is stored in settings (`pinView`) so it survives a reload.
+- **FEATURE:** Implemented as a flex row on `<main>` - the view sections
+  were already its direct children, so nothing is moved in the DOM and each
+  view keeps its own state (notably the scratchpad's undo stack and every
+  pane's scroll position). Both panes re-render on a tab change so an edit
+  made on one side shows up on the other.
+- **FEATURE:** Below 900px the pinned pane is dropped and only the active
+  tab shows, since half a phone screen isn't usable for either view.
+
+## Scratchpad tabs
+
+- **FEATURE:** The scratchpad holds up to 8 named pads instead of one, with
+  a tab strip above the toolbar: `+` adds, `x` closes (with a confirm if
+  the pad has content, and the last one can't be closed), double-click a
+  tab to rename it inline. Download names the file after the active pad.
+- **FEATURE:** The stored shape became
+  `{pads:[{id,name,text}], active, size, wrap, nums}`. The old single-pad
+  `{text:...}` is migrated into the first pad on load, so an existing
+  scratchpad carries over untouched.
+- **KNOWN LIMIT:** All pads share the one textarea, so the browser's undo
+  history resets when you switch pads - Ctrl+Z won't reach back past a pad
+  switch.
+

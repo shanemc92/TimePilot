@@ -30,7 +30,12 @@ See [CHANGELOG.md](CHANGELOG.md) for what's changed release to release.
 - **Notes, Snippets & Clipboard** - free-form note sections (reorderable,
   click a note to copy it), a searchable code-snippet library, and a
   Markdown-aware clipboard library for reusable text/templates.
-- **Scratchpad** - a plain-text scratch tab for quick copy/paste: line
+- **Split view** - pin any tab to the left half of the screen and hop
+  between the others on the right (Board next to Scratch, Today next to
+  Snippets, and so on). Clicking the pinned tab swaps the two sides. The
+  pin is remembered; narrow screens fall back to one tab at a time.
+- **Scratchpad** - a plain-text scratch tab for quick copy/paste, with up
+  to 8 named pads open at once (double-click a pad tab to rename it): line
   numbers, adjustable text size, word wrap, live line/word/char counts,
   find & replace (with regex and capture groups), and one-click transforms
   (remove blank lines, dedupe, sort, trim trailing space, case). Autosaves
