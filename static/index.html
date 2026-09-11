@@ -539,7 +539,59 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 const THEMES = [["dark","Dark"],["light","Light"],["htb","HackTheBox"],["dracula","Dracula"]];
 const FONTS = [["sans","Sans"],["mono","Mono"],["serif","Serif"]];
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const COLS = [["today","Today"],["week","This Week"],["nextweek","Next Week"],["nextmonth","Next Month"],["done","Done"]];
+const COL_DEFAULTS = [
+  {k:"today", label:"Today"},
+  {k:"high",  label:"High Priority"},
+  {k:"med",   label:"Medium Priority"},
+  {k:"low",   label:"Low Priority"},
+  {k:"done",  label:"Done", done:true},
+];
+const COL_MAX = 6;
+// The original hardcoded columns, in order. Used once, to map tasks onto the
+// defaults above for accounts that predate configurable columns.
+const COL_LEGACY = ["today","week","nextweek","nextmonth","done"];
+
+function getCols(){
+  const raw = S.settings.columns;
+  if(!Array.isArray(raw) || !raw.length) return COL_DEFAULTS.map(c=>({...c}));
+  const out = raw.filter(c => c && typeof c === "object" && c.k).slice(0, COL_MAX).map(c => ({
+    k: String(c.k),
+    label: (typeof c.label === "string" && c.label.trim()) ? c.label.trim() : String(c.k),
+    done: !!c.done,
+  }));
+  if(!out.length) return COL_DEFAULTS.map(c=>({...c}));
+  let seen = false;                      // at most one done column
+  out.forEach(c => { if(!c.done) return; if(seen) c.done = false; else seen = true; });
+  return out;
+}
+// Whatever sits first is the column the Today tab works from.
+const firstColK = () => getCols()[0].k;
+const doneColK = () => (getCols().find(c=>c.done) || {}).k || null;
+const colLabel = k => (getCols().find(c=>c.k===k) || {}).label || k;
+
+// Accounts created before columns were configurable have no settings.columns
+// and tasks sitting in the old keys, so map them onto the new defaults by
+// position - This Week becomes High Priority, Next Week becomes Medium, and
+// so on. Nothing is orphaned and nothing is piled into Today.
+function migrateColumns(){
+  if(Array.isArray(S.settings.columns) && S.settings.columns.length) return;
+  S.settings.columns = COL_DEFAULTS.map(c=>({...c}));
+  const map = {};
+  COL_LEGACY.forEach((old, i) => { if(COL_DEFAULTS[i]) map[old] = COL_DEFAULTS[i].k; });
+  S.tasks.forEach(t => { if(map[t.column] && map[t.column] !== t.column) t.column = map[t.column]; });
+  markDirty();
+}
+// Safety net for tasks pointing at a column that no longer exists.
+function reconcileColumns(){
+  const valid = new Set(getCols().map(c=>c.k)), first = firstColK(), done = doneColK();
+  let changed = false;
+  S.tasks.forEach(t => {
+    if(!valid.has(t.column)){ t.column = first; changed = true; }
+    if(t.column !== first && t.slot){ t.slot = null; changed = true; }
+    if(t.column !== done && t.doneAt){ t.doneAt = null; changed = true; }
+  });
+  if(changed) markDirty();
+}
 const DEF_CATS = [{k:"general",label:"General",color:"#5b9bd5"},{k:"meetings",label:"Meetings",color:"#57b76a"},{k:"admin",label:"Admin",color:"#a17ae0"}];
 const getCats = () => (S.settings.categories && S.settings.categories.length) ? S.settings.categories : DEF_CATS;
 const allCats = () => [...getCats(), {k:"meeting",label:"Meeting",color:null}];
@@ -561,7 +613,7 @@ let view = "board", calCache = {};
 async function loadState(){
   const r = await fetch("/api/state");
   if(r.status === 401 || r.redirected){ location.href = "/login"; return; }
-  S = await r.json(); dailyCleanup(); applySettings(); renderAll();
+  S = await r.json(); migrateColumns(); reconcileColumns(); dailyCleanup(); applySettings(); renderAll();
   // Warm today's calendar in the background rather than waiting for
   // whichever tab happens to trigger the first fetch of the day (often
   // Export). The server caches raw ICS bytes for 5 minutes (CACHE_TTL in
@@ -799,7 +851,8 @@ $("#stopBtn").onclick = stopTimer;
 /* ================= board ================= */
 function renderBoard(){
   const board = $("#board"); board.innerHTML = "";
-  COLS.forEach(([key,label])=>{
+  const first = firstColK(), doneK = doneColK();
+  getCols().forEach(({k:key,label})=>{
     const col = document.createElement("div"); col.className = "col"; col.dataset.col = key;
     const tasks = S.tasks.filter(t=>t.column===key);
     col.innerHTML = `<h2>${label}<span><button class="ghost small" title="Add task with full details" style="padding:1px 8px;margin-right:6px">＋</button><span class="muted">${tasks.length}</span></span></h2>`;
@@ -809,17 +862,18 @@ function renderBoard(){
     col.ondragleave = () => col.classList.remove("dragover");
     col.ondrop = e => { e.preventDefault(); col.classList.remove("dragover");
       const t = S.tasks.find(x=>x.id===e.dataTransfer.getData("id"));
-      if(t){ t.column = key; if(key!=="today") t.slot=null;
-        t.doneAt = key==="done" ? todayISO() : null;
+      if(t){ t.column = key; if(key!==first) t.slot=null;
+        t.doneAt = key===doneK ? todayISO() : null;
         markDirty(); renderBoard(); } };
     board.appendChild(col);
   });
 }
 function dailyCleanup(){
-  const today = todayISO();
-  S.tasks.forEach(t=>{ if(t.column==="done" && !t.doneAt) t.doneAt = today; });
+  const today = todayISO(), doneK = doneColK();
+  if(!doneK) return;                 // no column marked done - nothing auto-clears
+  S.tasks.forEach(t=>{ if(t.column===doneK && !t.doneAt) t.doneAt = today; });
   const n = S.tasks.length;
-  S.tasks = S.tasks.filter(t => !(t.column==="done" && t.doneAt < today));
+  S.tasks = S.tasks.filter(t => !(t.column===doneK && t.doneAt < today));
   if(S.tasks.length !== n) markDirty();
 }
 function cardEl(t){
@@ -839,11 +893,11 @@ function cardEl(t){
 }
 function taskModal(t, col){
   const isNew = !t;
-  if(isNew) t = { title:"", category:defCat(), column:col||"today", est:30, slot:null };
+  if(isNew) t = { title:"", category:defCat(), column:col||firstColK(), est:30, slot:null };
   openModal(`<h3>${isNew?"New task":"Edit task"}</h3>
     <div class="fRow"><label>Title</label><input id="mTitle" value="${esc(t.title)}"></div>
     <div class="fRow"><label>Category</label><select id="mCat">${getCats().map(c=>`<option value="${c.k}"${t.category===c.k?" selected":""}>${esc(c.label)}</option>`).join("")}</select></div>
-    <div class="fRow"><label>Column</label><select id="mCol">${COLS.map(([k,l])=>`<option value="${k}"${t.column===k?" selected":""}>${l}</option>`).join("")}</select></div>
+    <div class="fRow"><label>Column</label><select id="mCol">${getCols().map(c=>`<option value="${esc(c.k)}"${t.column===c.k?" selected":""}>${esc(c.label)}</option>`).join("")}</select></div>
     <div class="fRow"><label>Estimate (minutes)</label><input id="mEst" type="number" min="5" step="5" value="${t.est||30}"></div>
     <div class="mActions">${isNew?"":'<button class="danger" id="mDel">Delete</button>'}<button id="mCancel">Cancel</button><button class="primary" id="mSave">${isNew?"Add":"Save"}</button></div>`);
   const save = () => {
@@ -851,8 +905,8 @@ function taskModal(t, col){
     if(!title){ alert("Title is required."); return; }
     t.title = title; t.category = $("#mCat").value;
     t.column = $("#mCol").value; t.est = +$("#mEst").value || 30;
-    if(t.column !== "today") t.slot = null;
-    t.doneAt = t.column==="done" ? (t.doneAt || todayISO()) : null;
+    if(t.column !== firstColK()) t.slot = null;
+    t.doneAt = t.column===doneColK() ? (t.doneAt || todayISO()) : null;
     if(isNew) S.tasks.push({id:uid(), ...t});
     markDirty(); closeModal(); renderBoard(); if(view==="today") renderToday();
   };
@@ -948,7 +1002,7 @@ async function renderToday(force){
   }
   const ignoreEv = (S.settings.ignoreEvents || ["Private Appointment"]).map(x=>x.toLowerCase().trim()).filter(Boolean);
   const timedEvents = cal.events.filter(e=>!e.allDay && !ignoreEv.includes((e.title||"").toLowerCase().trim()));
-  const todayTasks = S.tasks.filter(t=>t.column==="today");
+  const todayTasks = S.tasks.filter(t=>t.column===firstColK());
   const slottedTasks = todayTasks.filter(t=>t.slot);
 
   // one shared layout pass across meetings + tasks, so an overlap between the
@@ -1035,7 +1089,7 @@ async function renderToday(force){
       sl.appendChild(row);
     }
   });
-  if(!todayTasks.length) un.innerHTML = `<span class="muted small">No tasks in Today column.</span>`;
+  if(!todayTasks.length) un.innerHTML = `<span class="muted small">No tasks in the ${esc(colLabel(firstColK()))} column.</span>`;
 }
 $("#calRefresh").onclick = () => renderToday(true);
 
@@ -1959,6 +2013,11 @@ $("#settingsBtn").onclick = () => {
           <span class="small muted" id="sNtfyStatus"></span>
         </div></div>`)}
     ${sec("Categories &amp; timers", `
+      <div class="fRow"><label>Board columns (up to ${COL_MAX})</label><div id="sCols"></div>
+        <button id="sColAdd" class="ghost small" type="button">+ Add column</button>
+        <span class="small muted">The first column is the one the Today tab pulls its tasks from.
+        Ticking "clears daily" marks the column whose cards are deleted the next day - untick them
+        all to keep cards indefinitely. Deleting a column moves its tasks to the first column.</span></div>
       <div class="fRow"><label>Task categories</label><div id="sCats"></div>
         <button id="sCatAdd" class="ghost small" type="button">+ Add category</button></div>
       <div class="fRow"><label>Interrupt quick-timers (one per line)</label><textarea id="sInt" rows="4">${esc((s.interrupts||[]).join("\n"))}</textarea></div>
@@ -2068,6 +2127,33 @@ $("#settingsBtn").onclick = () => {
     if(perm !== "granted") notifBox.checked = false;
     renderNotifNote();
   };
+  // --- board column manager (works on a copy; applied on Save) ---
+  const colsWork = getCols().map(c=>({...c}));
+  function drawCols(){
+    const box = $("#sCols"); box.innerHTML = "";
+    colsWork.forEach((c,i)=>{
+      const n = S.tasks.filter(t=>t.column===c.k).length;
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;gap:6px;align-items:center;margin-bottom:5px";
+      row.innerHTML = `<input maxlength="24" value="${esc(c.label)}" style="flex:1;min-width:0">
+        <label class="small muted" style="flex:none;display:flex;gap:4px;align-items:center"
+          title="Cards in this column are deleted the next day"><input type="checkbox"${c.done?" checked":""}> clears daily</label>
+        <span class="small muted" style="flex:none;min-width:62px;text-align:right">${i===0?"Today source":(n?n+(n===1?" task":" tasks"):"")}</span>
+        <button type="button" class="ghost small danger"${colsWork.length<2?" disabled":""}>&#10005;</button>`;
+      const [lab, dn] = row.querySelectorAll("input");
+      lab.onchange = () => { c.label = lab.value.trim().slice(0,24) || c.label; lab.value = c.label; };
+      dn.onchange = () => { colsWork.forEach(x=>x.done=false); c.done = dn.checked; drawCols(); };
+      row.querySelector("button").onclick = () => {
+        const dest = (i === 0 ? colsWork[1] : colsWork[0]).label;
+        if(n && !confirm(`Delete "${c.label}"? Its ${n} task${n===1?"":"s"} move to "${dest}".`)) return;
+        colsWork.splice(i,1); drawCols();
+      };
+      box.appendChild(row);
+    });
+    $("#sColAdd").disabled = colsWork.length >= COL_MAX;
+  }
+  drawCols();
+  $("#sColAdd").onclick = () => { colsWork.push({k:"col_"+uid(), label:"New column", done:false}); drawCols(); };
   // --- category manager (works on a copy; applied on Save) ---
   const catsWork = getCats().map(c=>({...c}));
   function drawCats(){
@@ -2113,18 +2199,16 @@ $("#settingsBtn").onclick = () => {
       quickTags: parseQuickTagsInput($("#sQuickTags").value),
       interrupts:$("#sInt").value.split("\n").map(x=>x.trim()).filter(Boolean),
       ignoreEvents:$("#sIgnore").value.split("\n").map(x=>x.trim()).filter(Boolean),
-      categories: catsWork });
+      categories: catsWork, columns: colsWork });
     const valid = new Set(catsWork.map(c=>c.k));
     S.tasks.forEach(t=>{ if(!valid.has(t.category)) t.category = defCat(); });
+    reconcileColumns();   // rehome tasks whose column was renamed away or deleted
     S.timelog.forEach(e=>{ if(e.category && e.category!=="meeting" && !valid.has(e.category)) e.category = defCat(); });
     calCache = {}; markDirty();
     await persist();   // wait for the actual write to land - Settings Save is a deliberate action, not
                         // something that should still be sitting in the 600ms auto-save debounce when
                         // the modal closes and the user immediately checks Today/Export against the server
-    applySettings(); closeModal(); renderStrip();
-    if(view==="board") renderBoard();
-    if(view==="today") renderToday(); if(view==="export") renderExport();
-    if(view==="notif") renderNotif();
+    applySettings(); closeModal(); renderAll();
   };
   $("#mCancel").onclick = () => { applySettings(); closeModal(); };
 };
@@ -2210,7 +2294,7 @@ function checkTaskReminders(){
   // so opening the app late doesn't dump every earlier task on you.
   const GRACE = 10;
   const due = S.tasks.find(t => {
-    if(t.column !== "today" || !t.slot) return false;
+    if(t.column !== firstColK() || !t.slot) return false;
     if(t.reminded === today+" "+t.slot) return false;          // already shown for this slot today
     if(S.activeTimer && S.activeTimer.taskId === t.id) return false;
     const at = hmToMin(t.slot);

@@ -73,6 +73,13 @@ DEFAULT_SETTINGS = {
     "ntfyTopic": "",
     "ntfyIcon": "",
     "ntfyTasks": False,
+    "columns": [
+        {"k": "today", "label": "Today"},
+        {"k": "high", "label": "High Priority"},
+        {"k": "med", "label": "Medium Priority"},
+        {"k": "low", "label": "Low Priority"},
+        {"k": "done", "label": "Done", "done": True},
+    ],
     "quickTags": ["alarm_clock", "mailbox_with_mail", "warning", "rotating_light",
                   "calendar", "computer", "bulb", "white_check_mark",
                   "closed_lock_with_key", "wastebasket"],

@@ -385,3 +385,31 @@ chronological order (oldest first).
   history resets when you switch pads - Ctrl+Z won't reach back past a pad
   switch.
 
+## Configurable board columns
+
+- **CHANGE:** The board's five hardcoded columns became editable in Settings,
+  up to 6 of them. New defaults: Today, High Priority, Medium Priority, Low
+  Priority, Done - replacing Today / This Week / Next Week / Next Month /
+  Done.
+- **FEATURE:** Columns are stored as `settings.columns`
+  (`[{k, label, done}]`). Position 0 is the column the Today tab plans from
+  and the only one that can hold time slots, whatever it's named - the old
+  hardcoded `"today"` and `"done"` key checks are gone, replaced by
+  `firstColK()` and `doneColK()`.
+- **FEATURE:** The destructive daily clear-out is now an explicit per-column
+  "clears daily" tick rather than an implied property of a column called
+  Done. At most one column can hold it, and with none ticked nothing is ever
+  auto-deleted.
+- **FEATURE:** Renaming a column leaves its key alone, so tasks don't move.
+  Deleting a column moves its tasks to the first column (confirmed first,
+  with the count), and `reconcileColumns()` rehomes any task pointing at a
+  column that no longer exists, clearing slots and `doneAt` that no longer
+  apply.
+- **MIGRATION:** Accounts with no `settings.columns` get the new defaults,
+  with existing tasks mapped across by position - This Week becomes High
+  Priority, Next Week becomes Medium, Next Month becomes Low. Nothing is
+  orphaned and nothing is dumped into Today.
+- **FIX:** Saving Settings now re-renders through `renderAll()` instead of
+  only the active view, so a board pinned in split view picks up column
+  changes immediately.
+

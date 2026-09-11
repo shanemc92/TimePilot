@@ -30,6 +30,10 @@ See [CHANGELOG.md](CHANGELOG.md) for what's changed release to release.
 - **Notes, Snippets & Clipboard** - free-form note sections (reorderable,
   click a note to copy it), a searchable code-snippet library, and a
   Markdown-aware clipboard library for reusable text/templates.
+- **Configurable board columns** - rename the kanban columns in Settings and
+  run up to 6 of them. Defaults are Today, High Priority, Medium Priority,
+  Low Priority, Done. The first column is always what the Today tab plans
+  from, whatever it's called, and one column can be marked "clears daily".
 - **Split view** - pin any tab to the left half of the screen and hop
   between the others on the right (Board next to Scratch, Today next to
   Snippets, and so on). Clicking the pinned tab swaps the two sides. The
