@@ -131,7 +131,7 @@ EOF
     systemctl restart ssh
 
     local listening=false
-    for i in $(seq 1 10); do
+    for _ in $(seq 1 10); do
         if ss -tlnp 2>/dev/null | grep -q ":${SSH_PORT} "; then listening=true; break; fi
         sleep 1
     done
