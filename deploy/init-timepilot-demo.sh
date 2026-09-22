@@ -235,9 +235,9 @@ run_step "install Docker" check_docker_install step_docker_install
 ### 4. Clone TimePilot (never wipe an existing checkout — it holds .env/secrets) ###
 check_clone() { [[ -d /opt/TimePilot/.git ]]; }
 step_clone() {
-    cd /opt
+    cd /opt || return 1
     git clone https://github.com/shanemc92/TimePilot.git
-    cd /opt/TimePilot
+    cd /opt/TimePilot || return 1
     cp .env.example .env
 }
 run_step "clone TimePilot repo" check_clone step_clone
@@ -247,7 +247,7 @@ run_step "clone TimePilot repo" check_clone step_clone
 ### and guarantees the working tree matches origin exactly, same as a fresh clone would give. ###
 check_repo_update() { false; }   # always re-check for updates, cheap no-op if already current
 step_repo_update() {
-    cd /opt/TimePilot
+    cd /opt/TimePilot || return 1
     git fetch origin
     git reset --hard origin/HEAD
 }
@@ -262,7 +262,7 @@ check_secrets() {
       && grep -q '^TIMEPILOT_MASTER_KEY=.\+' /opt/TimePilot/.env
 }
 step_secrets() {
-    cd /opt/TimePilot
+    cd /opt/TimePilot || return 1
     local pg_pass flask_secret master_key
     pg_pass=$(openssl rand -hex 24)
     flask_secret=$(openssl rand -hex 32)
@@ -288,7 +288,7 @@ check_demo_env() {
     [[ -n "${current}" && "${current}" == "${prefix}"*"${suffix}" ]]
 }
 step_demo_env() {
-    cd /opt/TimePilot
+    cd /opt/TimePilot || return 1
     local banner
     # Substitute the literal %s placeholder rather than using printf, so a template containing
     # other % characters (e.g. "50% off") isn't misinterpreted as a printf format spec.
@@ -362,8 +362,8 @@ run_step "docker compose up" check_compose_up step_compose_up
 
 check_healthcheck() { curl -fsS http://127.0.0.1:5170/healthz >/dev/null 2>&1; }
 step_healthcheck() {
-    cd /opt/TimePilot
-    for i in {1..30}; do
+    cd /opt/TimePilot || return 1
+    for _ in {1..30}; do
         if curl -fsS http://127.0.0.1:5170/healthz >/dev/null 2>&1; then return 0; fi
         # The app isn't safe against concurrent schema creation across gunicorn workers on a fresh
         # DB — a worker can lose a CREATE TABLE race and crash the container into a restart loop.
