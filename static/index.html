@@ -120,6 +120,7 @@ main.split > section{flex:1 1 0;min-width:0}
 .card .meta{display:flex;gap:8px;align-items:center;margin-top:5px;font-size:11px;color:var(--muted);flex-wrap:wrap}
 .card .meta button{padding:2px 8px;font-size:11px;flex:none}
 .card .meta .metaSpacer{flex:1 1 auto;min-width:0}
+.card .meta .hasDet{cursor:pointer;font-size:12px;line-height:1}
 .badge{padding:1px 7px;border-radius:999px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
 .addRow select{font-size:12px;padding:4px;max-width:78px}
 .addRow{display:flex;gap:6px;margin-top:4px}
@@ -835,7 +836,10 @@ function interruptModal(name){
 let _tickDay = todayISO();
 function tick(){
   const d = todayISO();
-  if(S && d !== _tickDay){ _tickDay = d; dailyCleanup(); if(view==="board") renderBoard(); }
+  if(S && d !== _tickDay){ _tickDay = d; dailyCleanup();
+    const shown = [view, pinnedView()];
+    if(shown.includes("board")) renderBoard();
+    if(shown.includes("today")) renderToday(); }
   const t = S && S.activeTimer;
   if(!t){ $("#elapsed").textContent = "00:00"; $("#timerTimes").textContent = ""; return; }
   const st = new Date(t.start);
@@ -868,8 +872,18 @@ function renderBoard(){
     board.appendChild(col);
   });
 }
+// Slots are for one day only. slotDay records when a task was slotted, so a
+// task left unfinished doesn't reappear at the same time tomorrow. Tasks
+// slotted before slotDay existed are stamped today rather than wiped, so
+// their slots clear from tomorrow like any other.
+function setSlot(t, hm){ t.slot = hm; t.slotDay = todayISO(); }
 function dailyCleanup(){
   const today = todayISO(), doneK = doneColK();
+  S.tasks.forEach(t=>{
+    if(!t.slot){ if(t.slotDay){ delete t.slotDay; markDirty(); } return; }
+    if(!t.slotDay){ t.slotDay = today; markDirty(); }
+    else if(t.slotDay < today){ t.slot = null; t.reminded = null; delete t.slotDay; markDirty(); }
+  });
   if(!doneK) return;                 // no column marked done - nothing auto-clears
   S.tasks.forEach(t=>{ if(t.column===doneK && !t.doneAt) t.doneAt = today; });
   const n = S.tasks.length;
@@ -883,12 +897,15 @@ function cardEl(t){
   el.innerHTML = `<div class="title">${esc(t.title)}</div>
     <div class="meta">${badgeHtml(t.category)}
     <span>${t.est||30}m</span>${t.slot?`<span>@${t.slot}</span>`:""}
+    ${t.details?`<span class="hasDet" title="Has details - click to view">📝</span>`:""}
     <span class="metaSpacer"></span>
     <button title="Start timer">▶</button><button title="Edit">✎</button></div>`;
   el.ondragstart = e => e.dataTransfer.setData("id", t.id);
   const [play, edit] = el.querySelectorAll("button");
   play.onclick = () => startTimer(t.title, t.id);
   edit.onclick = () => taskModal(t);
+  const det = el.querySelector(".hasDet");
+  if(det) det.onclick = () => taskModal(t);
   return el;
 }
 function taskModal(t, col){
@@ -899,12 +916,19 @@ function taskModal(t, col){
     <div class="fRow"><label>Category</label><select id="mCat">${getCats().map(c=>`<option value="${c.k}"${t.category===c.k?" selected":""}>${esc(c.label)}</option>`).join("")}</select></div>
     <div class="fRow"><label>Column</label><select id="mCol">${getCols().map(c=>`<option value="${esc(c.k)}"${t.column===c.k?" selected":""}>${esc(c.label)}</option>`).join("")}</select></div>
     <div class="fRow"><label>Estimate (minutes)</label><input id="mEst" type="number" min="5" step="5" value="${t.est||30}"></div>
+    <div class="fRow"><label>Details (optional - notes, next steps, log...)</label><textarea id="mDetails" rows="8"
+      style="resize:vertical" placeholder="Anything that doesn't fit in the title. Not shown on the board.">${esc(t.details||"")}</textarea></div>
     <div class="mActions">${isNew?"":'<button class="danger" id="mDel">Delete</button>'}<button id="mCancel">Cancel</button><button class="primary" id="mSave">${isNew?"Add":"Save"}</button></div>`);
+  $("#modalBox").classList.add("sticky");
   const save = () => {
     const title = $("#mTitle").value.trim();
     if(!title){ alert("Title is required."); return; }
     t.title = title; t.category = $("#mCat").value;
     t.column = $("#mCol").value; t.est = +$("#mEst").value || 30;
+    // Stored only when non-blank, so tasks without details stay as they were
+    // and the board's 📝 indicator is a plain truthiness check.
+    const details = $("#mDetails").value.replace(/\s+$/,"");
+    if(details.trim()) t.details = details; else delete t.details;
     if(t.column !== firstColK()) t.slot = null;
     t.doneAt = t.column===doneColK() ? (t.doneAt || todayISO()) : null;
     if(isNew) S.tasks.push({id:uid(), ...t});
@@ -1046,7 +1070,7 @@ async function renderToday(force){
         let m = viewStartM + parseFloat(b.style.top) / pxPerMin;
         m = Math.round(m / 5) * 5;                                       // snap to 5 min
         m = Math.min(viewEndM - (t.est||30), Math.max(viewStartM, m));   // stay inside the visible range
-        t.slot = minToHM(m); markDirty(); renderToday();
+        setSlot(t, minToHM(m)); markDirty(); renderToday();
       };
       b.addEventListener("pointermove", mv);
       b.addEventListener("pointerup", up);
@@ -1075,10 +1099,10 @@ async function renderToday(force){
       row.innerHTML = `<span class="badge" style="background:${catColor(t.category)}">&nbsp;</span><span class="nm">${esc(t.title)} <span class="muted small">(${t.est||30}m)</span></span>
         <input type="time"><button>Slot</button><button class="ghost">Auto</button>`;
       const [inp] = row.querySelectorAll("input"), [btn, auto] = row.querySelectorAll("button");
-      btn.onclick = () => { if(inp.value){ t.slot = inp.value; markDirty(); renderToday(); } };
+      btn.onclick = () => { if(inp.value){ setSlot(t, inp.value); markDirty(); renderToday(); } };
       auto.onclick = () => { const g = firstGap(t.est||30);
         if(g==null){ alert("No free gap fits within work hours today."); return; }
-        t.slot = minToHM(g); markDirty(); renderToday(); };
+        setSlot(t, minToHM(g)); markDirty(); renderToday(); };
       un.appendChild(row);
     } else {
       row.innerHTML = `<span class="badge" style="background:${catColor(t.category)}">&nbsp;</span><span class="nm">${esc(t.title)}</span>
@@ -2212,9 +2236,11 @@ $("#settingsBtn").onclick = () => {
   };
   $("#mCancel").onclick = () => { applySettings(); closeModal(); };
 };
-function openModal(html){ $("#modalBox").innerHTML = html; $("#modal").classList.add("open"); }
-function closeModal(){ $("#modal").classList.remove("open"); $("#modalBox").classList.remove("settings"); }
-$("#modal").onclick = e => { if(e.target.id==="modal") closeModal(); };
+function openModal(html){ $("#modalBox").innerHTML = html; $("#modalBox").classList.remove("sticky"); $("#modal").classList.add("open"); }
+function closeModal(){ $("#modal").classList.remove("open"); $("#modalBox").classList.remove("settings","sticky"); }
+// A "sticky" modal (see taskModal) ignores backdrop clicks, so a stray click
+// can't throw away typed text - only Cancel/Save/Delete close it.
+$("#modal").onclick = e => { if(e.target.id==="modal" && !$("#modalBox").classList.contains("sticky")) closeModal(); };
 
 /* ================= nav ================= */
 document.querySelectorAll("nav .tab").forEach(b=>{
@@ -2386,7 +2412,7 @@ function reminderModal(t){
     // check won't re-fire until that new time actually arrives.
     let m = Math.max(hmToMin(t.slot), hmToMin(hmNow())) + mins;
     m = Math.min(endM - (t.est||30), m);
-    t.slot = minToHM(m);
+    setSlot(t, minToHM(m));
     t.reminded = null;    // re-arm: it will fire again when the new slot time arrives
     markDirty(); closeModal(); if(view==="today") renderToday();
   };

@@ -413,3 +413,24 @@ chronological order (oldest first).
   only the active view, so a board pinned in split view picks up column
   changes immediately.
 
+
+## Task details
+
+- **FEATURE:** Tasks have an optional multi-line **Details** field in the
+  add/edit modal, below the existing Title, for notes, next steps or a
+  running log on long-lived tasks. It isn't shown on the board; a 📝 on
+  the card marks tasks that have details, and clicking it opens the task.
+  Stored as `details` on the task only when non-blank, so existing tasks and
+  exports are unchanged.
+- **FEATURE:** Clicking the backdrop no longer closes the task add/edit
+  modal, so a stray click can't discard typed details. Cancel, Save or
+  Delete close it; other modals still close on a backdrop click.
+
+## Daily slot reset
+
+- **FEATURE:** Time slots on the Today tab now only last for the day they
+  were set. A slotted task that isn't finished goes back to unslotted the
+  next day instead of reappearing at the same time. Tasks record the day
+  they were slotted (`slotDay`); the check runs on load and at midnight.
+  Slots set before this change are treated as set today, so they clear
+  from tomorrow rather than being wiped on upgrade.
