@@ -1769,7 +1769,17 @@ async function renderExport(){
   if(entries.length){
     const first = Math.min(...entries.map(e=>hmToMin(e.start)));
     const last = Math.max(...entries.map(e=>hmToMin(e.end)));
-    out += `\nTotal: ${fmtDur(Math.max(0, last - first))} (${minToHM(first)}-${minToHM(last)})`;
+    const elapsed = Math.max(0, last - first);
+    const total = entries.reduce((a,e)=>a+e.minutes, 0);
+    // gaps = elapsed time not covered by any entry (overlapping entries are merged first)
+    let covered = 0, edge = first;
+    entries.map(e=>[hmToMin(e.start), hmToMin(e.end)]).sort((a,b)=>a[0]-b[0]).forEach(([s,e])=>{
+      if(e > edge){ covered += e - Math.max(s, edge); edge = e; }
+    });
+    const gaps = Math.max(0, elapsed - covered);
+    out += `\nElapsed Time: ${fmtDur(elapsed)} (${minToHM(first)}-${minToHM(last)})`;
+    out += `\nTotal Time: ${fmtDur(total)}`;
+    out += `\nGaps: ${fmtDur(gaps)} (${(gaps/60).toFixed(2)})`;
   } else out += "No entries.";
   $("#exportText").textContent = out;
 }
