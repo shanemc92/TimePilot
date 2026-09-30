@@ -5,11 +5,47 @@ exporter for multiple users - Kanban board, calendar-aware day view, code
 snippet & clipboard libraries, all behind your own login. Data is encrypted
 at rest in PostgreSQL.
 
+**3.0 - Glass.** A ground-up visual refresh: frosted-glass panels, a floating
+icon rail, and a glowing LCD timer. The functionality is identical to 2.x -
+same backend, same data, same features. See [Versions](#versions) if you'd
+rather stay on the classic look.
+
 See [CHANGELOG.md](CHANGELOG.md) for what's changed release to release.
 
-![TimePilot demo](docs/demo.gif)
+![TimePilot demo](docs/demo.webp)
 
-![TimePilot screenshot](docs/screenshot.png)
+![TimePilot 3.0 screenshot](docs/screenshot.png)
+
+![TimePilot 3.0, Aurora theme](docs/screenshot-aurora.png)
+
+*3.0 with the Aurora theme.*
+
+## Versions
+
+| | Look | Where to get it |
+|---|---|---|
+| **3.x - Glass** (current) | Frosted glass, icon rail, ambient light | `main`, image `:latest` / `:3` |
+| **2.x - Classic** | Flat dark UI, top tab bar | branch `release/2.x`, tag `v2.7.0`, image `:2` / `:2.7` |
+
+The two share the same backend and database schema, so you can switch
+between them at any time without migrating or exporting anything - your
+tasks, notes and settings are the same either way. (One small catch: 2.x has
+no Aurora theme, so an account set to it falls back to Dark when opened in
+2.x.)
+
+**Stay on the classic look:** pin the image in `docker-compose.yml`
+(`image: ghcr.io/shanemc92/timepilot:2`) then `docker compose pull && docker
+compose up -d`. From source: `git clone --branch release/2.x
+https://github.com/shanemc92/timepilot.git`. Pinned to `:latest`? You'll get
+3.0 on your next pull. Security fixes are backported to 2.x.
+
+![TimePilot 2.x (Classic)](docs/screenshot-classic.png)
+
+*2.x (Classic), for comparison.*
+
+**Browser support (3.x):** the frosted effect uses `backdrop-filter` - Chrome
+and Edge 76+, Safari 9+, Firefox 103+. On anything older the panels fall back
+to plain translucent surfaces with no blur; everything still works.
 
 ## Features
 
@@ -37,7 +73,11 @@ See [CHANGELOG.md](CHANGELOG.md) for what's changed release to release.
 - **Split view** - pin any tab to the left half of the screen and hop
   between the others on the right (Board next to Scratch, Today next to
   Snippets, and so on). Clicking the pinned tab swaps the two sides. The
-  pin is remembered; narrow screens fall back to one tab at a time.
+  pinned tab is marked with a dot on the icon rail. The pin is remembered;
+  narrow screens fall back to one tab at a time.
+- **Themes** - dark, light, HTB, Dracula and Aurora (Settings ->
+  Appearance), all built on the glass look. On phones the icon rail becomes a
+  bottom dock.
 - **Scratchpad** - a plain-text scratch tab for quick copy/paste, with up
   to 8 named pads open at once (double-click a pad tab to rename it): line
   numbers, adjustable text size, word wrap, live line/word/char counts,

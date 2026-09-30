@@ -1,7 +1,7 @@
 name: Build and publish image
 
-# Runs on: pushes to main (tags :latest), and version tags like v2.7.0
-# (tags :2.7.0, :2.7 and :2 too). Nothing runs on pull requests, so forks/PRs
+# Runs on: pushes to main (tags :latest), and version tags like v3.0.0
+# (tags :3.0.0, :3.0 and :3 too). Nothing runs on pull requests, so forks/PRs
 # can't push images to your registry.
 on:
   push:

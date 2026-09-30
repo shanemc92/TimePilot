@@ -461,3 +461,34 @@ chronological order (oldest first).
   fuzz. `tests/` is excluded from the Docker image.
 - **FEATURE:** The image workflow also publishes a floating major tag
   (`:2`) alongside the exact version tags.
+
+## 3.0.0 - Glass skin
+
+Includes everything in 2.7.0.
+
+- **FEATURE:** Full visual redesign. Frosted-glass panels, columns, modals
+  and timeline over soft ambient light and grain; gradient buttons, glowing
+  toggles and focus rings; a glowing LCD timer, with the header bar lighting
+  up green while a timer runs.
+- **FEATURE:** New layout. The top tab row is now a floating icon rail on the
+  left, with hover labels, and Split / Settings / Log out sit as icon buttons
+  in the timer header. A dot on the rail marks the pinned tab in split view.
+  On phones the rail becomes a bottom dock.
+- **FEATURE:** All four existing themes (dark, light, HTB, Dracula) re-tuned
+  for the glass look. The login and signup pages restyled to match.
+- **FEATURE:** New **Aurora** theme (Settings -> Appearance): a deep
+  teal-black palette with a mint accent and teal and violet ambient light.
+- **FEATURE:** Only the styles, nav markup and theme list changed in the page
+  (`static/index.html`, `templates/base_auth.html`); the app logic, database
+  schema and export format are unchanged, so 2.x and 3.x can be swapped
+  freely against the same data (an account set to Aurora falls back to Dark
+  in 2.x). The film-grain texture is a static file (`static/grain.svg`)
+  because the CSP blocks `data:` images. Blur is limited to the rail, header
+  and modal, since blurring every panel is costly on large libraries.
+- **FEATURE:** README gains a Versions section explaining how to stay on the
+  classic look (branch `release/2.x`, tag `v2.7.0`, image `:2`). The
+  screenshot is replaced, an Aurora screenshot is added, and the demo is now
+  a full-colour animated WebP (`docs/demo.webp`, replacing the GIF, whose
+  256-colour palette washed out the colours). The classic screenshot is kept
+  as `docs/screenshot-classic.png`.
+- **FEATURE:** The image workflow also publishes a floating `:3` tag.
