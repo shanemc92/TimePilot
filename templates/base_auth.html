@@ -7,15 +7,15 @@
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
 <style>
 *{box-sizing:border-box;margin:0}
-:root{--bg:#0e0c0b;--surface:rgba(34,30,28,.58);--surface2:rgba(255,255,255,.06);--line:rgba(255,255,255,.10);
-  --text:#f5f0ea;--muted:#a39a91;--accent:#ff7a2f;--danger:#ff6a4d;color-scheme:dark}
+:root{--bg:#050c11;--surface:rgba(15,32,40,.58);--surface2:rgba(190,240,255,.06);--line:rgba(160,230,255,.12);
+  --text:#e8f4f6;--muted:#7fa2ad;--accent:#2dd4bf;--danger:#ff6b81;color-scheme:dark}
 html{background:var(--bg)}
 body{color:var(--text);font-family:"Inter","SF Pro Display","Segoe UI Variable Display","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
   min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;-webkit-font-smoothing:antialiased}
 body::before{content:"";position:fixed;inset:0;z-index:-1;
-  background:radial-gradient(60vmax 46vmax at 6% -6%,rgba(255,122,47,.30),transparent 62%),
-  radial-gradient(52vmax 44vmax at 104% 16%,rgba(120,90,255,.20),transparent 62%),
-  radial-gradient(70vmax 46vmax at 42% 112%,rgba(255,170,90,.14),transparent 62%),var(--bg)}
+  background:radial-gradient(60vmax 46vmax at 6% -6%,rgba(45,212,191,.36),transparent 62%),
+  radial-gradient(52vmax 44vmax at 104% 16%,rgba(139,92,246,.36),transparent 62%),
+  radial-gradient(70vmax 46vmax at 42% 112%,rgba(56,189,248,.22),transparent 62%),var(--bg)}
 .card{background:var(--surface);-webkit-backdrop-filter:blur(26px) saturate(150%);backdrop-filter:blur(26px) saturate(150%);
   border:1px solid var(--line);border-radius:30px;padding:36px 34px;width:100%;max-width:380px;
   box-shadow:0 40px 90px -30px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.10)}
@@ -27,13 +27,13 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;
 label{font-size:12px;font-weight:550;color:var(--muted)}
 input[type=text],input[type=password]{background:var(--surface2);border:1px solid var(--line);color:var(--text);
   border-radius:13px;padding:11px 13px;font-size:14px;font-family:inherit;transition:border-color .15s,box-shadow .15s}
-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,122,47,.26)}
+input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(45,212,191,.26)}
 .errors{color:var(--danger);font-size:12px;margin-top:3px}
 .flash{background:color-mix(in srgb,var(--danger) 15%,transparent);border:1px solid var(--danger);
   color:var(--text);border-radius:13px;padding:9px 12px;font-size:13px;margin-bottom:14px}
 .notice{background:color-mix(in srgb,var(--accent) 14%,transparent);border:1px solid color-mix(in srgb,var(--accent) 60%,transparent);
   color:var(--text);border-radius:13px;padding:9px 12px;font-size:13px;margin-bottom:14px;text-align:center}
-button,input[type=submit]{width:100%;background:linear-gradient(180deg,#ff9a5c,var(--accent));color:#1c0f06;border:none;border-radius:13px;
+button,input[type=submit]{width:100%;background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 86%,#fff),var(--accent));color:#04211d;border:none;border-radius:13px;
   padding:12px;font-size:14px;font-weight:650;cursor:pointer;margin-top:8px;font-family:inherit;appearance:none;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.35);transition:filter .15s,transform .15s}
 button:hover,input[type=submit]:hover{filter:brightness(1.07)}

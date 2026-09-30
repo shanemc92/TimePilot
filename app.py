@@ -55,7 +55,7 @@ CALENDAR_DOMAIN = "calendar_ics"
 
 DEFAULT_SETTINGS = {
     "icsUrl": "",
-    "theme": "dark",
+    "theme": "aurora",
     "pinView": "",
     "font": "sans",
     "dayStart": "09:00",

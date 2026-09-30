@@ -16,9 +16,9 @@ See [CHANGELOG.md](CHANGELOG.md) for what's changed release to release.
 
 ![TimePilot 3.0 screenshot](docs/screenshot.png)
 
-![TimePilot 3.0, Aurora theme](docs/screenshot-aurora.png)
+![TimePilot 3.0, Dark theme](docs/screenshot-dark.png)
 
-*3.0 with the Aurora theme.*
+*3.0 with the Aurora theme (the default, top) and the true-black Dark theme.*
 
 ## Versions
 
@@ -75,7 +75,7 @@ to plain translucent surfaces with no blur; everything still works.
   Snippets, and so on). Clicking the pinned tab swaps the two sides. The
   pinned tab is marked with a dot on the icon rail. The pin is remembered;
   narrow screens fall back to one tab at a time.
-- **Themes** - dark, light, HTB, Dracula and Aurora (Settings ->
+- **Themes** - Aurora (default), a true-black Dark, light, HTB and Dracula (Settings ->
   Appearance), all built on the glass look. On phones the icon rail becomes a
   bottom dock.
 - **Scratchpad** - a plain-text scratch tab for quick copy/paste, with up

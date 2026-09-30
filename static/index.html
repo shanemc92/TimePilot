@@ -14,14 +14,15 @@
 
 /* ---- themes: glass tint, card tint, hairline, ambient light orbs ---- */
 [data-theme="dark"]{
+  /* "Ink": true-black, monochrome, no ambient colour - deliberately unlike the tinted themes */
   color-scheme:dark;
-  --bg:#0e0c0b; --surface:rgba(34,30,28,.58); --surface-strong:rgba(28,25,23,.86);
-  --surface2:rgba(255,255,255,.06); --line:rgba(255,255,255,.09); --hi:rgba(255,255,255,.10);
-  --text:#f5f0ea; --muted:#a39a91; --accent:#ff7a2f; --accent-text:#1c0f06;
-  --cat-general:#5b9bd5; --cat-secops:#ff6a4d; --cat-change:#b48cf0;
-  --cal:#3f5a78; --danger:#ff6a4d; --ok:#4ade80; --lcd-bg:rgba(0,0,0,.42);
-  --orb1:rgba(255,122,47,.34); --orb2:rgba(120,90,255,.26); --orb3:rgba(255,150,80,.20);
-  --shadow:0 24px 60px -24px rgba(0,0,0,.75);
+  --bg:#000; --surface:rgba(12,12,13,.80); --surface-strong:rgba(8,8,9,.96);
+  --surface2:rgba(255,255,255,.045); --line:rgba(255,255,255,.08); --hi:rgba(255,255,255,.06);
+  --text:#ececee; --muted:#85858c; --accent:#e4e4e8; --accent-text:#0a0a0b;
+  --cat-general:#7aa2d6; --cat-secops:#e0644f; --cat-change:#a58fd6;
+  --cal:#2b3038; --danger:#e0644f; --ok:#4ade80; --lcd-bg:rgba(255,255,255,.04);
+  --orb1:rgba(255,255,255,.035); --orb2:rgba(255,255,255,.02); --orb3:rgba(255,255,255,.025);
+  --shadow:0 24px 60px -24px rgba(0,0,0,.95);
 }
 [data-theme="light"]{
   color-scheme:light;
@@ -432,7 +433,7 @@ input.scrRename{font-size:12px;padding:1px 5px;width:120px;min-width:0}
 @media print{body::before{display:none}nav,#topbar{display:none}}
 </style>
 </head>
-<body data-theme="dark" data-font="sans">
+<body data-theme="aurora" data-font="sans">
 
 <nav>
   <h1 class="brand"><img src="/static/logo.svg" alt=""><span class="brandName">TimePilot</span></h1>
@@ -780,7 +781,7 @@ const safeColor = c => (typeof c === "string" && /^(#[0-9a-fA-F]{3,8}|rgb\([\d,\
 /* ================= settings/theme ================= */
 function applySettings(){
   const validThemes = THEMES.map(t=>t[0]), validFonts = FONTS.map(f=>f[0]);
-  if(!validThemes.includes(S.settings.theme)) S.settings.theme = "dark";
+  if(!validThemes.includes(S.settings.theme)) S.settings.theme = "aurora";
   if(!validFonts.includes(S.settings.font)) S.settings.font = "sans";
   document.body.dataset.theme = S.settings.theme;
   document.body.dataset.font = S.settings.font;

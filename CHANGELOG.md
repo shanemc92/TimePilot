@@ -492,3 +492,4 @@ Includes everything in 2.7.0.
   256-colour palette washed out the colours). The classic screenshot is kept
   as `docs/screenshot-classic.png`.
 - **FEATURE:** The image workflow also publishes a floating `:3` tag.
+- **FEATURE:** Aurora is now the default theme for new accounts (and the login page). Dark is redone as a true-black, monochrome "ink" theme with a silver accent and almost no ambient light, so it no longer resembles the tinted themes. Existing accounts keep their saved theme. Screenshots and demo are re-recorded with Aurora; `docs/screenshot-aurora.png` is replaced by `docs/screenshot-dark.png`.

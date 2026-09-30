@@ -88,7 +88,7 @@ def build():
     return {
         "settings": {
             "icsUrl": "",
-            "theme": "dark",
+            "theme": "aurora",
             "font": "sans",
             "dayStart": "09:00",
             "dayEnd": "17:00",
