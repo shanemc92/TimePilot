@@ -12,6 +12,8 @@ rather stay on the classic look.
 
 See [CHANGELOG.md](CHANGELOG.md) for what's changed release to release.
 
+![TimePilot demo](docs/demo.webp)
+
 ![TimePilot 3.0 screenshot](docs/screenshot.png)
 
 ![TimePilot 3.0, Aurora theme](docs/screenshot-aurora.png)
