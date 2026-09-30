@@ -30,6 +30,7 @@ from extensions import db, login_manager, limiter, csrf
 from models import User, UserData
 from crypto import Encryptor
 import auth as auth_bp_module
+from sanitize import clean_state_values
 
 logger = logging.getLogger("timepilot")
 
@@ -272,10 +273,11 @@ STATE_SHAPE = {
 
 
 def _clean_state(state):
-    """Keep only known top-level keys with the expected container type.
-    Shared by the live PUT /api/state and the backup-restore import
-    endpoint, so both apply exactly the same validation - no drift between
-    'save my current edits' and 'restore from a file'."""
+    """Keep only known top-level keys with the expected container type, then
+    validate the fields inside them. Shared by the live PUT /api/state and
+    the backup-restore import endpoint, so both apply exactly the same
+    validation - no drift between 'save my current edits' and 'restore from
+    a file'."""
     if not isinstance(state, dict):
         return None
     clean = {}
@@ -284,7 +286,9 @@ def _clean_state(state):
             clean[k] = state[k]
     if "activeTimer" in state and (state["activeTimer"] is None or isinstance(state["activeTimer"], dict)):
         clean["activeTimer"] = state["activeTimer"]
-    return clean
+    # Container types are right; now validate the fields inside them (see
+    # sanitize.py). Repairs bad values instead of rejecting the request.
+    return clean_state_values(clean)
 
 
 def _require_env(name):

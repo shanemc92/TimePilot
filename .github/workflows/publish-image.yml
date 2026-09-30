@@ -1,7 +1,7 @@
 name: Build and publish image
 
-# Runs on: pushes to main (tags :latest), and version tags like v1.2.0
-# (tags :v1.2.0 and :1.2.0 too). Nothing runs on pull requests, so forks/PRs
+# Runs on: pushes to main (tags :latest), and version tags like v2.7.0
+# (tags :2.7.0, :2.7 and :2 too). Nothing runs on pull requests, so forks/PRs
 # can't push images to your registry.
 on:
   push:
@@ -48,6 +48,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
             type=sha,prefix=
 
       - name: Build and push

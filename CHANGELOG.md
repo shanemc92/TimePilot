@@ -434,3 +434,30 @@ chronological order (oldest first).
   they were slotted (`slotDay`); the check runs on load and at midnight.
   Slots set before this change are treated as set today, so they clear
   from tomorrow rather than being wiped on upgrade.
+
+## 2.7.0 - Security hardening
+
+- **BUGFIX:** Values from saved state were put into the page without HTML
+  escaping in many places: board column names and category keys, the task
+  estimate and slot shown on cards, the Today lists and the reminder popup,
+  the time and duration fields in the Export table, the reminder priority,
+  and the work-hours, display-range, lunch, rounding and reminder-lead fields
+  in Settings. A crafted backup file imported through Settings (or a
+  hand-edited saved state) could therefore run script in the account
+  holder's session, since the CSP allows inline script. All of these now go
+  through `esc()`.
+- **FEATURE:** The server now validates every stored field, on live saves
+  and on backup import (`sanitize.py`). Times must be `HH:MM`, numbers must be
+  numbers, keys and ids must be plain identifiers, colours must be hex, and
+  types are enforced (so a number where the UI expects text can no longer
+  leave the page blank). Bad values are repaired instead of rejected, free
+  text is stored exactly as typed, and unknown scalar settings from a newer
+  client survive the round trip.
+- **BUGFIX:** Reminders inside an imported backup skipped the checks the
+  reminders API applies (priority range, interval type, message length). They
+  now go through the same rules.
+- **FEATURE:** Unit tests for the validator (`python -m unittest discover -s
+  tests`), including a round trip of the demo account and a garbage-input
+  fuzz. `tests/` is excluded from the Docker image.
+- **FEATURE:** The image workflow also publishes a floating major tag
+  (`:2`) alongside the exact version tags.

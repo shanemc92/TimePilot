@@ -274,6 +274,16 @@ such an address, so this is the one place that guard can be relaxed - set
 operator decision made once in the environment, rather than something any
 registered user can switch on from Settings.
 
+**Input validation.** The page escapes everything it renders, and the
+server independently validates every field it stores (`sanitize.py`), on both
+live saves and backup imports: times must be `HH:MM`, numbers must be numbers,
+keys and ids must be plain identifiers, colours must be hex, and imported
+reminders get the same checks as the reminders API. Bad values are repaired
+rather than rejected, so one stray field can't lose the rest of a restore or
+leave the UI unable to render. Free text (titles, notes, snippets) is kept
+exactly as typed and escaped on output. Run the tests with
+`python -m unittest discover -s tests`.
+
 **Response headers.** Every response carries `Content-Security-Policy`
 (self-only sources, no framing, no plugins), `X-Frame-Options: DENY`,
 `X-Content-Type-Options: nosniff`, and `Referrer-Policy: no-referrer`.

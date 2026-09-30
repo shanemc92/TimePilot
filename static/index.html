@@ -740,7 +740,7 @@ async function editTimerModal(){
   const curCat = t.category || ((S.tasks.find(x=>x.id===t.taskId)||{}).category) || defCat();
   openModal(`<h3>Edit current task</h3>
     <div class="fRow"><label>Task name</label><input id="etName" value="${esc(t.label)}"></div>
-    <div class="fRow"><label>Category</label><select id="etCat">${allCats().map(c=>`<option value="${c.k}"${curCat===c.k?" selected":""}>${esc(c.label)}</option>`).join("")}</select></div>
+    <div class="fRow"><label>Category</label><select id="etCat">${allCats().map(c=>`<option value="${esc(String(c.k))}"${curCat===c.k?" selected":""}>${esc(c.label)}</option>`).join("")}</select></div>
     <div class="fRow"><label>Start time (now: running ${fmtDur((Date.now()-st)/60000)})</label><input id="etStart" type="time" value="${pad(st.getHours())}:${pad(st.getMinutes())}">
       <div id="etSyncNote" class="small muted" style="margin-top:4px">Checking today's log…</div>
       <label id="etSyncRow" class="small" style="display:none;margin-top:6px">
@@ -859,7 +859,7 @@ function renderBoard(){
   getCols().forEach(({k:key,label})=>{
     const col = document.createElement("div"); col.className = "col"; col.dataset.col = key;
     const tasks = S.tasks.filter(t=>t.column===key);
-    col.innerHTML = `<h2>${label}<span><button class="ghost small" title="Add task with full details" style="padding:1px 8px;margin-right:6px">＋</button><span class="muted">${tasks.length}</span></span></h2>`;
+    col.innerHTML = `<h2>${esc(label)}<span><button class="ghost small" title="Add task with full details" style="padding:1px 8px;margin-right:6px">＋</button><span class="muted">${tasks.length}</span></span></h2>`;
     col.querySelector("h2 button").onclick = () => taskModal(null, key);
     tasks.forEach(t => col.appendChild(cardEl(t)));
     col.ondragover = e => { e.preventDefault(); col.classList.add("dragover"); };
@@ -896,7 +896,7 @@ function cardEl(t){
   el.style.borderLeftColor = catColor(t.category);
   el.innerHTML = `<div class="title">${esc(t.title)}</div>
     <div class="meta">${badgeHtml(t.category)}
-    <span>${t.est||30}m</span>${t.slot?`<span>@${t.slot}</span>`:""}
+    <span>${esc(String(t.est||30))}m</span>${t.slot?`<span>@${esc(String(t.slot))}</span>`:""}
     ${t.details?`<span class="hasDet" title="Has details - click to view">📝</span>`:""}
     <span class="metaSpacer"></span>
     <button title="Start timer">▶</button><button title="Edit">✎</button></div>`;
@@ -913,9 +913,9 @@ function taskModal(t, col){
   if(isNew) t = { title:"", category:defCat(), column:col||firstColK(), est:30, slot:null };
   openModal(`<h3>${isNew?"New task":"Edit task"}</h3>
     <div class="fRow"><label>Title</label><input id="mTitle" value="${esc(t.title)}"></div>
-    <div class="fRow"><label>Category</label><select id="mCat">${getCats().map(c=>`<option value="${c.k}"${t.category===c.k?" selected":""}>${esc(c.label)}</option>`).join("")}</select></div>
+    <div class="fRow"><label>Category</label><select id="mCat">${getCats().map(c=>`<option value="${esc(String(c.k))}"${t.category===c.k?" selected":""}>${esc(c.label)}</option>`).join("")}</select></div>
     <div class="fRow"><label>Column</label><select id="mCol">${getCols().map(c=>`<option value="${esc(c.k)}"${t.column===c.k?" selected":""}>${esc(c.label)}</option>`).join("")}</select></div>
-    <div class="fRow"><label>Estimate (minutes)</label><input id="mEst" type="number" min="5" step="5" value="${t.est||30}"></div>
+    <div class="fRow"><label>Estimate (minutes)</label><input id="mEst" type="number" min="5" step="5" value="${esc(String(t.est||30))}"></div>
     <div class="fRow"><label>Details (optional - notes, next steps, log...)</label><textarea id="mDetails" rows="8"
       style="resize:vertical" placeholder="Anything that doesn't fit in the title. Not shown on the board.">${esc(t.details||"")}</textarea></div>
     <div class="mActions">${isNew?"":'<button class="danger" id="mDel">Delete</button>'}<button id="mCancel">Cancel</button><button class="primary" id="mSave">${isNew?"Add":"Save"}</button></div>`);
@@ -1096,7 +1096,7 @@ async function renderToday(force){
   todayTasks.forEach(t=>{
     const row = document.createElement("div"); row.className="slotItem";
     if(!t.slot){
-      row.innerHTML = `<span class="badge" style="background:${catColor(t.category)}">&nbsp;</span><span class="nm">${esc(t.title)} <span class="muted small">(${t.est||30}m)</span></span>
+      row.innerHTML = `<span class="badge" style="background:${catColor(t.category)}">&nbsp;</span><span class="nm">${esc(t.title)} <span class="muted small">(${esc(String(t.est||30))}m)</span></span>
         <input type="time"><button>Slot</button><button class="ghost">Auto</button>`;
       const [inp] = row.querySelectorAll("input"), [btn, auto] = row.querySelectorAll("button");
       btn.onclick = () => { if(inp.value){ setSlot(t, inp.value); markDirty(); renderToday(); } };
@@ -1106,7 +1106,7 @@ async function renderToday(force){
       un.appendChild(row);
     } else {
       row.innerHTML = `<span class="badge" style="background:${catColor(t.category)}">&nbsp;</span><span class="nm">${esc(t.title)}</span>
-        <span class="small muted">@${t.slot}</span><button title="Start timer">▶</button><button class="ghost">Unslot</button>`;
+        <span class="small muted">@${esc(String(t.slot))}</span><button title="Start timer">▶</button><button class="ghost">Unslot</button>`;
       const [play, unbtn] = row.querySelectorAll("button");
       play.onclick = () => startTimer(t.title, t.id);
       unbtn.onclick = () => { t.slot=null; markDirty(); renderToday(); };
@@ -1626,9 +1626,9 @@ async function renderExport(){
     const c = entCat(e);
     const tr = document.createElement("tr");
     tr.innerHTML = `<td><div class="labCell"><span title="${e.source==="cal"?"from calendar":"task/timer entry"}">${e.source==="cal"?"📅":"📋"}</span><input value="${esc(e.label)}"></div></td>
-      <td><select>${allCats().map(cc=>`<option value="${cc.k}"${c===cc.k?" selected":""}>${esc(cc.label)}</option>`).join("")}</select></td>
-      <td><input type="time" value="${e.start}"></td><td><input type="time" value="${e.end}"></td>
-      <td><input type="number" min="1" value="${e.minutes}"></td>
+      <td><select>${allCats().map(cc=>`<option value="${esc(String(cc.k))}"${c===cc.k?" selected":""}>${esc(cc.label)}</option>`).join("")}</select></td>
+      <td><input type="time" value="${esc(String(e.start))}"></td><td><input type="time" value="${esc(String(e.end))}"></td>
+      <td><input type="number" min="1" value="${esc(String(e.minutes))}"></td>
       <td class="rowActs"><span class="actWrap"><button class="ghost small" data-save title="Save changes" disabled>💾</button><button class="ghost small danger" data-del title="Delete">✕</button></span></td>`;
     const [lab, st, en, mi] = tr.querySelectorAll("input"), catSel = tr.querySelector("select");
     const saveBtn = tr.querySelector("[data-save]");
@@ -1864,7 +1864,7 @@ function renderRemList(){
         <div class="rMsg">${emoji} ${esc(r.message)}</div>
         <div class="rMeta">
           <span class="${r.next_fire<=now?"rDue":""}">${esc(fmtWhen(r.next_fire))}</span>
-          <span>P${r.priority} ${esc(PRIO_LABEL[r.priority]||"")}</span>
+          <span>P${esc(String(r.priority))} ${esc(PRIO_LABEL[r.priority]||"")}</span>
           ${r.recurring?`<span>🔁 ${esc(fmtInterval(r.interval_type, r.interval_value))}</span>`:"<span>one-off</span>"}
         </div></div>
       <div class="rActs"><button data-edit class="ghost small" title="Edit">&#9998;</button>
@@ -1983,25 +1983,25 @@ $("#settingsBtn").onclick = () => {
     ${sec("Hours &amp; day", `
       <div class="fRow"><label>Work hours</label>
         <div style="display:flex;gap:8px">
-          <input id="sStart" type="time" value="${s.dayStart}"><input id="sEnd" type="time" value="${s.dayEnd}">
+          <input id="sStart" type="time" value="${esc(String(s.dayStart))}"><input id="sEnd" type="time" value="${esc(String(s.dayEnd))}">
         </div>
         <span class="small muted">Used for "Auto"-slotting tasks and the day's default range.</span></div>
       <div class="fRow"><label>Calendar display range</label>
         <div style="display:flex;gap:8px">
-          <input id="sViewStart" type="time" value="${s.viewStart||""}"><input id="sViewEnd" type="time" value="${s.viewEnd||""}">
+          <input id="sViewStart" type="time" value="${esc(String(s.viewStart||""))}"><input id="sViewEnd" type="time" value="${esc(String(s.viewEnd||""))}">
         </div>
         <span class="small muted">What the Today timeline actually shows - leave blank to match work hours. Widen this to see/drag tasks into early mornings or evenings without changing what "Auto" treats as normal hours.</span></div>
       <div class="fRow"><label>Lunch break (optional)</label>
         <div style="display:flex;gap:8px">
-          <input id="sLunchStart" type="time" value="${s.lunchStart||""}"><input id="sLunchEnd" type="time" value="${s.lunchEnd||""}">
+          <input id="sLunchStart" type="time" value="${esc(String(s.lunchStart||""))}"><input id="sLunchEnd" type="time" value="${esc(String(s.lunchEnd||""))}">
         </div>
         <span class="small muted">"Auto" will skip over this window. Leave both blank for no lunch block.</span></div>
-      <div class="fRow"><label>Round export durations to (minutes)</label><input id="sRound" type="number" min="1" value="${s.rounding||5}"></div>`)}
+      <div class="fRow"><label>Round export durations to (minutes)</label><input id="sRound" type="number" min="1" value="${esc(String(s.rounding||5))}"></div>`)}
     ${sec("Reminders", `
       <div class="fRow"><label>Slotted-task reminders</label>
         <div style="display:flex;gap:10px;align-items:center">
           <label class="small"><input type="checkbox" id="sRemind"${s.remind!==false?" checked":""}> enabled</label>
-          <input id="sLead" type="number" min="0" max="120" value="${s.remindLead||0}" style="width:70px">
+          <input id="sLead" type="number" min="0" max="120" value="${esc(String(s.remindLead||0))}" style="width:70px">
           <span class="small muted">min before slot time</span>
         </div></div>
       <div class="fRow"><label>Calendar meeting reminders</label>
@@ -2399,7 +2399,7 @@ function fireBrowserNotification(title, body, key){
 }
 function reminderModal(t){
   openModal(`<h3>⏰ Task due: ${esc(t.title)}</h3>
-    <p class="muted small" style="margin-bottom:14px">Slotted for ${t.slot} · ${esc(catName(t.category))} · ${t.est||30}m estimate</p>
+    <p class="muted small" style="margin-bottom:14px">Slotted for ${esc(String(t.slot))} · ${esc(catName(t.category))} · ${esc(String(t.est||30))}m estimate</p>
     <div class="mActions" style="justify-content:flex-start;flex-wrap:wrap">
       <button class="primary" id="rStart">▶ Start now</button>
       <button id="r15">+15m</button><button id="r30">+30m</button><button id="r60">+1h</button>
