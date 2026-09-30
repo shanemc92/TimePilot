@@ -103,8 +103,8 @@ button:hover{border-color:color-mix(in srgb,var(--accent) 65%,transparent);backg
 button:active{transform:translateY(1px) scale(.98)}
 button.primary{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 86%,#fff),var(--accent));
   color:var(--accent-text);border-color:transparent;font-weight:650;
-  box-shadow:0 8px 22px -8px color-mix(in srgb,var(--accent) 80%,transparent),inset 0 1px 0 rgba(255,255,255,.35)}
-button.primary:hover{filter:brightness(1.07);box-shadow:0 10px 28px -8px color-mix(in srgb,var(--accent) 90%,transparent),inset 0 1px 0 rgba(255,255,255,.4)}
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+button.primary:hover{filter:brightness(1.07)}
 button.ghost{background:transparent}
 button.danger{color:var(--danger)}
 button.danger:hover{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)}
@@ -126,7 +126,7 @@ h1{font-size:17px;letter-spacing:.02em}
 nav{grid-column:1;position:sticky;top:var(--pad);align-self:start;height:calc(100vh - 2*var(--pad));z-index:50;
   display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 0;border-radius:32px;background:var(--surface)}
 nav h1.brand{display:flex;flex-direction:column;align-items:center;margin-bottom:14px;font-size:0}
-nav h1.brand img{width:40px;height:40px;filter:drop-shadow(0 6px 14px color-mix(in srgb,var(--accent) 55%,transparent))}
+nav h1.brand img{width:40px;height:40px;}
 nav .brandName{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 nav .tab{position:relative;width:48px;height:48px;padding:0;display:flex;align-items:center;justify-content:center;
   background:transparent;border:1px solid transparent;border-radius:16px;color:var(--muted);
@@ -135,7 +135,7 @@ nav .tab svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1
 nav .tab:hover{background:var(--surface2);color:var(--text);border-color:var(--line);transform:translateY(-1px)}
 nav .tab.on{background:linear-gradient(150deg,color-mix(in srgb,var(--accent) 80%,#fff),var(--accent));
   color:var(--accent-text);border-color:transparent;
-  box-shadow:0 10px 26px -6px color-mix(in srgb,var(--accent) 75%,transparent),inset 0 1px 0 rgba(255,255,255,.4)}
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
 nav .tab.pinned::after{content:"";position:absolute;top:7px;right:7px;width:7px;height:7px;border-radius:50%;
   background:var(--accent);box-shadow:0 0 9px var(--accent)}
 nav .tab .lbl{position:absolute;left:calc(100% + 16px);top:50%;transform:translate(-6px,-50%);opacity:0;pointer-events:none;
@@ -175,7 +175,7 @@ nav .spacer{margin-top:auto}
 .chips{display:flex;gap:7px;flex-wrap:wrap;margin-left:auto}
 .chip{border-radius:999px;padding:6px 14px;font-size:12px;font-weight:550}
 .chip.active{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 86%,#fff),var(--accent));
-  color:var(--accent-text);border-color:transparent;box-shadow:0 6px 18px -6px color-mix(in srgb,var(--accent) 80%,transparent)}
+  color:var(--accent-text);border-color:transparent}
 .stripActs{display:flex;gap:8px;align-items:center;padding-left:14px;border-left:1px solid var(--line)}
 .stripActs .iconBtn{width:40px;height:40px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:14px}
 .stripActs .iconBtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -228,8 +228,8 @@ section[id^="view-"]{animation:rise .35s cubic-bezier(.2,.7,.2,1)}
 .block.task{background-image:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0) 70%)!important;font-weight:650;cursor:grab;user-select:none;touch-action:none;transition:transform .15s,box-shadow .15s}
 .block.task:hover{box-shadow:0 12px 26px -10px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.2)}
 .block.task:active{cursor:grabbing}
-.block.now{left:0;right:0;height:0;border:none;border-top:2px solid var(--accent);border-radius:0;box-shadow:0 0 14px var(--accent);z-index:5;padding:0;overflow:visible}
-.block.now::before{content:"";position:absolute;left:-1px;top:-6px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.block.now{left:0;right:0;height:0;border:none;border-top:2px solid var(--accent);border-radius:0;z-index:5;padding:0;overflow:visible}
+.block.now::before{content:"";position:absolute;left:-1px;top:-6px;width:10px;height:10px;border-radius:50%;background:var(--accent)}
 
 /* markdown rendering (Clipboard) */
 .mdBody{font-family:var(--ff);font-size:13px;cursor:pointer}
