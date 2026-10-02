@@ -328,7 +328,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 #exportTable th:nth-child(2),#exportTable td:nth-child(2){width:88px}
 #exportTable th:nth-child(3),#exportTable td:nth-child(3),
 #exportTable th:nth-child(4),#exportTable td:nth-child(4){width:82px}
-#exportTable th:nth-child(5),#exportTable td:nth-child(5){width:58px}
+#exportTable th:nth-child(5),#exportTable td:nth-child(5){width:70px}
 #exportTable th:nth-child(6),#exportTable td:nth-child(6){width:70px}
 td,th{padding:6px 6px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
 th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
@@ -336,7 +336,7 @@ td input{width:100%;padding:4px 7px;font-size:13px;border-radius:9px}
 #entryRows td:nth-child(2){max-width:0}
 #entryRows select{width:100%;min-width:70px;font-size:12px}
 td input[type=time]{width:78px;padding:4px 3px;font-size:12px}
-td input[type=number]{width:48px}
+td input[type=number]{width:58px}
 .labCell{display:flex;align-items:center;gap:5px;white-space:nowrap}
 .labCell input{flex:1;min-width:50px;width:auto}
 .rowActs{white-space:nowrap}
@@ -1772,15 +1772,18 @@ async function renderExport(){
     const last = Math.max(...entries.map(e=>hmToMin(e.end)));
     const elapsed = Math.max(0, last - first);
     const total = entries.reduce((a,e)=>a+e.minutes, 0);
-    // gaps = elapsed time not covered by any entry (overlapping entries are merged first)
-    let covered = 0, edge = first;
+    // gaps = elapsed time not covered by any entry (overlapping entries are merged first); overlap = summed entry time minus that merged time
+    let covered = 0, edge = first, summed = 0;
     entries.map(e=>[hmToMin(e.start), hmToMin(e.end)]).sort((a,b)=>a[0]-b[0]).forEach(([s,e])=>{
+      summed += Math.max(0, e - s);
       if(e > edge){ covered += e - Math.max(s, edge); edge = e; }
     });
     const gaps = Math.max(0, elapsed - covered);
+    const overlap = Math.max(0, summed - covered);   // time counted by more than one entry
     out += `\nElapsed Time: ${fmtDur(elapsed)} (${minToHM(first)}-${minToHM(last)})`;
     out += `\nTotal Time: ${fmtDur(total)}`;
     out += `\nGaps: ${fmtDur(gaps)} (${(gaps/60).toFixed(2)})`;
+    out += `\nOverlap: ${fmtDur(overlap)} (${(overlap/60).toFixed(2)})`;
   } else out += "No entries.";
   $("#exportText").textContent = out;
 }
