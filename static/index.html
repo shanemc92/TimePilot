@@ -344,6 +344,7 @@ td input[type=number]{width:58px}
 .rowActs button{padding:3px 8px;line-height:1.4}
 #entryRows tr.overlap td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
 #entryRows tr.overlap td:nth-child(3) input,#entryRows tr.overlap td:nth-child(4) input{border-color:color-mix(in srgb,var(--danger) 55%,var(--line))}
+#entryRows tr.gapAfter td{border-bottom:2px solid color-mix(in srgb,var(--ok) 70%,transparent)}
 tr.rowDirty td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 pre#exportText{background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:14px;
   white-space:pre-wrap;font-size:13px;font-family:ui-monospace,monospace;min-height:140px}
@@ -1731,13 +1732,20 @@ async function renderExport(){
   try { await importCalToLog(d); } catch(e){ /* calendar issues shouldn't blank the table */ }
   const entries = S.timelog.filter(e=>e.date===d).sort((a,b)=>a.start.localeCompare(b.start));
   const tb = $("#entryRows"); tb.innerHTML = "";
-  entries.forEach(e=>{
+  let reach = -1;   // latest end seen so far; a later start beyond it means a gap
+  entries.forEach((e,i)=>{
     const c = entCat(e);
     const tr = document.createElement("tr");
     // flag rows whose time range overlaps another entry (touching end-to-start doesn't count)
     const [s0, e0] = [hmToMin(e.start), hmToMin(e.end)];
     const clash = entries.filter(o => o !== e && hmToMin(o.start) < e0 && s0 < hmToMin(o.end));
     if(clash.length){ tr.classList.add("overlap"); tr.title = "Overlaps: " + clash.map(o=>o.label).join(", "); }
+    reach = Math.max(reach, e0);
+    const nxt = entries[i+1];
+    if(nxt && hmToMin(nxt.start) > reach){
+      tr.classList.add("gapAfter");
+      tr.title = (tr.title ? tr.title + " - " : "") + "Gap of " + fmtDur(hmToMin(nxt.start) - reach) + " before the next entry";
+    }
     tr.innerHTML = `<td><div class="labCell"><span title="${e.source==="cal"?"from calendar":"task/timer entry"}">${e.source==="cal"?"📅":"📋"}</span><input value="${esc(e.label)}"></div></td>
       <td><select>${allCats().map(cc=>`<option value="${esc(String(cc.k))}"${c===cc.k?" selected":""}>${esc(cc.label)}</option>`).join("")}</select></td>
       <td><input type="time" value="${esc(String(e.start))}"></td><td><input type="time" value="${esc(String(e.end))}"></td>
